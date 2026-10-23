@@ -27,7 +27,7 @@ const manageLoginItems=!testing||process.env.QIXU_TEST_LOGIN_ITEMS==='1';
 const dataDir = process.env.MOYU_DATA_DIR || path.join(app.getPath('appData'), 'Moyu');
 app.setPath('userData', dataDir);
 app.setAppUserModelId('com.moyu.desktop');
-const state: AppState = { bossKeyPanel:false, bossKey:{configured:false,passwordRequired:true}, access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
+const state: AppState = { bossKeyPanel:false, bossKey:{configured:false,shortcutConfigured:false,passwordRequired:true}, access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
   media:{ url:'', title:'', loading:false, error:'', playing:null, muted:false, status:'' }, notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},resume:{...emptyResumeState} };
 let windowMode:WindowMode='todo';
 let win: BrowserWindow;
@@ -89,6 +89,7 @@ const todoHost=new TodoHost(command=>{
   else if(command==='BOSS_KEY_SETTINGS')openBossKeySettings();
   else if(command.startsWith('WIDGET_HOVER:'))widgetHovered=command.endsWith(':1');
   else if(testing&&command.startsWith('TEST_WINDOWS:'))app.emit('qixu:test-native-windows',command.slice(13));
+  else if(testing&&command.startsWith('TEST_BOSS_KEY_VISIBLE:'))app.emit('qixu:test-boss-key-visible',command.endsWith(':1'));
   else if(command==='QUIT'){if(!quitting)app.quit();}
   else if(command==='STARTUP_QUERY'){if(manageLoginItems&&app.isPackaged){try{state.settings.launchAtLogin=readStartup(app,process.execPath).enabled;persist();emit();}catch(error:any){todoHost.send('STATUS:'+error.message);}}todoHost.send('STARTUP:'+(state.settings.launchAtLogin?'1':'0'));}
   else if(command==='STARTUP_ON'||command==='STARTUP_OFF')void updateSettings({launchAtLogin:command==='STARTUP_ON'}).catch(error=>{todoHost.send('STATUS:'+error.message);todoHost.send('STARTUP:'+(state.settings.launchAtLogin?'1':'0'));});
@@ -130,6 +131,7 @@ function requestUnlock() {
   win.show();win.focus();
 }
 function openBossKeySettings(){
+ if(bossKeyConfig.shortcutConfigured)return;
  showTodo();state.bossKeyPanel=true;win.setTitle('栖序 · 老板键');win.setOpacity(1);win.setAlwaysOnTop(false);win.setBounds(visibleBounds({...win.getBounds(),width:560,height:720}));win.center();win.setSkipTaskbar(false);emit();win.show();win.focus();
 }
 function togglePrivate(){
@@ -174,7 +176,7 @@ async function load() {
     const loaded=await loadDurableState(settingsPath);const saved:any=loaded.data||{};
     state.settings=sanitizeSettings(saved.settings||{});
     bossKeyConfig=loadBossKey(saved.bossKey,!!loaded.data||(testing&&process.env.QIXU_TEST_FIRST_RUN!=='1'));
-    state.bossKey={configured:bossKeyConfig.configured,passwordRequired:bossKeyConfig.passwordRequired};
+    state.bossKey={configured:bossKeyConfig.configured,shortcutConfigured:bossKeyConfig.shortcutConfigured,passwordRequired:bossKeyConfig.passwordRequired};
     sourceCooldowns=sanitizeCooldowns(saved.sourceCooldowns);
     if(Array.isArray(saved.sources))state.sources=validateSources(saved.sources);
     if(saved.sourceRevision!==13)state.sources=migrateSources13(state.sources);
@@ -421,11 +423,11 @@ async function updateBossKey(patch:any){
  if(shortcut!==state.settings.shortcut&&!registerShortcut(shortcut))throw Error('快捷键无效或已被占用，请换一组组合键');
  const oldShortcut=state.settings.shortcut;
  state.settings.shortcut=shortcut;
- bossKeyConfig={configured:true,passwordRequired:patch.passwordRequired,legacyCtrlAlt:false,passwordRecord:record};
- state.bossKey={configured:true,passwordRequired:patch.passwordRequired};
+ bossKeyConfig={configured:true,shortcutConfigured:true,passwordRequired:patch.passwordRequired,legacyCtrlAlt:false,passwordRecord:record};
+ state.bossKey={configured:true,shortcutConfigured:true,passwordRequired:patch.passwordRequired};
  if(oldShortcut!==shortcut&&oldShortcut!=='Ctrl+Alt')globalShortcut.unregister(oldShortcut);
- persist(true);await persistQueue;emit();
- if(state.access==='prompt')showTodo('设置已保存，使用切换快捷键进入。');
+ persist(true);await persistQueue;todoHost.send('BOSS_KEY_CONFIGURED:1');emit();
+ if(state.access==='prompt'||state.bossKeyPanel)showTodo('老板键已保存，可在影音模式的设置中更改。');
  return publicState();
  }finally{bossKeySaveBusy=false;}
 }
@@ -715,9 +717,9 @@ async function start() {
   await controlsView.webContents.loadFile(path.join(__dirname,'../assets/fullscreen-controls.html'));
   if(testing)EventEmitter.prototype.on.call(app,'qixu:test-unlock',requestUnlock);
   if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-key',()=>todoHost.send('TEST_CTRL_ALT'));
-  if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-command',(command:string)=>{if(['TEST_WINDOWS','TEST_OPEN_LIST','TEST_CLOSE_WIDGET','TEST_GLOBAL_CTRL_ALT','TEST_OPEN_BOSS_KEY'].includes(command))todoHost.send(command);});
+  if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-command',(command:string)=>{if(['TEST_WINDOWS','TEST_OPEN_LIST','TEST_CLOSE_WIDGET','TEST_GLOBAL_CTRL_ALT','TEST_OPEN_BOSS_KEY','TEST_BOSS_KEY_VISIBLE'].includes(command))todoHost.send(command);});
   const nativeExe=app.isPackaged?path.join(process.resourcesPath,'native','TodoHost.exe'):path.join(__dirname,'../native/TodoHost.exe');
-  await todoHost.start(nativeExe,dataDir,process.execPath,state.settings.launchAtLogin,process.argv.includes('--autostart'),testing);
+  await todoHost.start(nativeExe,dataDir,process.execPath,state.settings.launchAtLogin,process.argv.includes('--autostart'),testing,bossKeyConfig.shortcutConfigured);
   state.todoReady=true;if(process.argv.includes('--boss-key-settings'))openBossKeySettings();else if(!bossKeyConfig.configured)requestUnlock();if(state.notice)todoHost.send('STATUS:'+state.notice);emit();
 }
 if(!testing&&!app.requestSingleInstanceLock())app.quit();else {

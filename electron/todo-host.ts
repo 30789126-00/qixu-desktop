@@ -11,7 +11,7 @@ export class TodoHost {
   ready=false;
   constructor(private onCommand:(command:string)=>void,private onExit:()=>void){}
   send(command:string){if(this.socket&&!this.socket.destroyed)this.socket.write(command.replace(/[\r\n]/g,' ')+'\n',()=>{});}
-  async start(executable:string,dataDir:string,appExe:string,startup:boolean,background:boolean,testing:boolean){
+  async start(executable:string,dataDir:string,appExe:string,startup:boolean,background:boolean,testing:boolean,shortcutConfigured:boolean){
     const folder=path.join(dataDir,'todo');
     await fs.mkdir(folder,{recursive:true});
     if(!testing)await migrateLegacy(dataDir);
@@ -30,7 +30,7 @@ export class TodoHost {
           if(!this.ready){if(line==='HELLO:'+nonce){this.ready=true;clearTimeout(timeout);resolve();}}else this.onCommand(line);
         }
       });});
-      this.child=spawn(executable,['--managed',...(background?['--background']:[])],{windowsHide:false,stdio:['ignore','ignore','pipe'],env:{...process.env,QIXU_TODO_DATA:folder,QIXU_BRIDGE_NONCE:nonce,QIXU_PIPE_NAME:pipeName,QIXU_APP_EXE:appExe,QIXU_STARTUP:startup?'1':'0',QIXU_TEST:testing?'1':'0'}});
+      this.child=spawn(executable,['--managed',...(background?['--background']:[])],{windowsHide:false,stdio:['ignore','ignore','pipe'],env:{...process.env,QIXU_TODO_DATA:folder,QIXU_BRIDGE_NONCE:nonce,QIXU_PIPE_NAME:pipeName,QIXU_APP_EXE:appExe,QIXU_STARTUP:startup?'1':'0',QIXU_TEST:testing?'1':'0',QIXU_BOSS_KEY_CONFIGURED:shortcutConfigured?'1':'0'}});
       this.child!.once('error',e=>{clearTimeout(timeout);reject(e);});
       this.child!.once('exit',()=>{clearTimeout(timeout);if(!this.ready)reject(new Error('待办工作区未能启动'));this.ready=false;this.onExit();});
       this.child!.stderr?.on('data',()=>{});

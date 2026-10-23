@@ -14,6 +14,7 @@ public static class ManagedBridge {
  public static bool Active;
  public static bool StartupEnabled;
  public static bool PrivateMode;
+ public static bool BossKeyConfigured;
  static MainWindow window;
  static NamedPipeClientStream pipe;
  static StreamReader input;
@@ -138,7 +139,8 @@ public static class ManagedBridge {
    if(command=="TEST_WINDOWS")Send("TEST_WINDOWS:"+window.BridgeWindowStatus());
    if(command=="TEST_OPEN_LIST")window.BridgeRestore();
    if(command=="TEST_CLOSE_WIDGET")window.BridgeCloseWidget();
-   if(command=="TEST_OPEN_BOSS_KEY")window.BridgeBossKeyButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+   if(command=="TEST_BOSS_KEY_VISIBLE")Send("TEST_BOSS_KEY_VISIBLE:"+(window.BridgeBossKeyButton.Visibility==Visibility.Visible&&window.BridgeBossKeyButton.IsEnabled?"1":"0"));
+   if(command=="TEST_OPEN_BOSS_KEY"&&window.BridgeBossKeyButton.IsVisible&&window.BridgeBossKeyButton.IsEnabled)window.BridgeBossKeyButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
   }
   if(command=="SHOW") { PrivateMode=false;foreach(var w in hidden)try{w.Show();}catch{}hidden.Clear();window.BridgeRestore(); }
   else if(command=="ENTER_PRIVATE") {PrivateMode=true;window.Hide();}
@@ -146,9 +148,10 @@ public static class ManagedBridge {
   else if(command=="EXIT")window.BridgeExit();
   else if(command.StartsWith("STATUS:"))window.BridgeReport(command.Substring(7));
   else if(command.StartsWith("STARTUP:")){StartupEnabled=command.Substring(8)=="1";window.BridgeRefreshStartup();}
+  else if(command.StartsWith("BOSS_KEY_CONFIGURED:")){BossKeyConfigured=command.Substring(20)=="1";window.BridgeBossKeyButton.Visibility=BossKeyConfigured?Visibility.Collapsed:Visibility.Visible;}
  }
  public static void Run(string[] args) {
-  Active=true;StartupEnabled=Environment.GetEnvironmentVariable("QIXU_STARTUP")=="1";
+  Active=true;StartupEnabled=Environment.GetEnvironmentVariable("QIXU_STARTUP")=="1";BossKeyConfigured=Environment.GetEnvironmentVariable("QIXU_BOSS_KEY_CONFIGURED")=="1";
   string folder=Environment.GetEnvironmentVariable("QIXU_TODO_DATA");
   if(String.IsNullOrEmpty(folder)||String.IsNullOrEmpty(Environment.GetEnvironmentVariable("QIXU_BRIDGE_NONCE")))return;
   pipe=new NamedPipeClientStream(".",Environment.GetEnvironmentVariable("QIXU_PIPE_NAME"),PipeDirection.InOut,PipeOptions.Asynchronous);

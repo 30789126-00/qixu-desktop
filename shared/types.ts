@@ -26,7 +26,7 @@ export interface ResumeState {
   activeBookId: string | null;
   recoveredAfterCrash: boolean;
 }
-export interface BossKeyState { configured:boolean; passwordRequired:boolean; }
+export interface BossKeyState { configured:boolean; shortcutConfigured:boolean; passwordRequired:boolean; }
 export interface BossKeyUpdate { shortcut:string; passwordRequired:boolean; currentPassword?:string; newPassword?:string; }
 export interface AppState { bossKeyPanel:boolean; bossKey:BossKeyState; access: 'todo'|'prompt'|'private'; todoReady: boolean; settings: Settings; sources: Source[]; books: Book[]; section: Section; activeSourceId: string | null; activeTabId: string | null; browserTabs: BrowserTab[]; browserHistory: BrowserHistoryEntry[]; browserBookmarks: BrowserBookmark[]; windowState: WindowState; fullscreen: boolean; media: MediaState; notice: string; loginMode: boolean; translation: TranslationState; resume: ResumeState; }
 export interface Rect { x: number; y: number; width: number; height: number; }
