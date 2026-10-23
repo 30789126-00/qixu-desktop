@@ -1,4 +1,6 @@
 const {_electron}=require('playwright');
+const http=require('node:http');
+const server=http.createServer((req,res)=>res.end('<html><body tabindex="0"><video controls></video><script>window.lastKey=null;document.addEventListener("keydown",e=>window.lastKey=e.key)</script></body></html>'));
 const {execFileSync}=require('node:child_process');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 
@@ -61,11 +63,12 @@ async function launch(){
 }
 
 async function main(){
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   await launch();
   const g=await geometry();
   assert.ok(g.outside,'测试窗口必须留有可移动到的屏幕外部区域');
 
-  const custom={id:'persist-check',title:'保存测试',url:'https://example.org/',kind:'video',color:'#123456',abbr:'测'};
+  const custom={id:'persist-check',title:'保存测试',url:'http://127.0.0.1:'+server.address().port+'/',kind:'video',color:'#123456',abbr:'测'};
   const initial=await api('getState');
   await api('saveSources',[...initial.sources.filter(s=>s.id!=='google'),custom]);
   const disk=JSON.parse(fs.readFileSync(path.join(dataDir,'state.json'),'utf8'));
@@ -77,6 +80,8 @@ async function main(){
   assert.ok(!restarted.sources.some(s=>s.id==='google'));
   assert.ok(restarted.sources.some(s=>s.id==='aikan'&&s.title==='爱看'));
   results.push({name:'网站新增删除立即写入，完整退出重启后保留，爱看固定存在',pass:true});
+  await api('openSource','persist-check');
+  await pause(200);
   const cycles=[];
   for(let i=0;i<5;i++){
     setCursor(g.inside.x,g.inside.y);
@@ -88,7 +93,7 @@ async function main(){
 
     setCursor(g.inside.x,g.inside.y);
     const restoreMs=await wait(async()=>(await api('getState')).windowState==='visible',700);
-    assert.ok(await app.evaluate(({BrowserWindow})=>BrowserWindow.getFocusedWindow()!==null),'自动恢复必须获得键盘焦点');
+    assert.ok(await app.evaluate(({BrowserWindow})=>BrowserWindow.getFocusedWindow()?.contentView.children.some(v=>v.webContents?.isFocused()&&v.webContents.getURL().startsWith('http://127.0.0.1:'))),'自动恢复必须获得键盘焦点');
     cycles.push({cycle:i+1,hideMs,restoreMs});
 
     // Regression: an automatic restore must be armed again without an extra click or detour.
@@ -120,6 +125,7 @@ main().catch(error=>{
   process.exitCode=1;
 }).finally(async()=>{
   if(app)await app.close().catch(()=>{});
+  server.close();
   const report=path.join(runDir,'report.json');
   fs.writeFileSync(report,JSON.stringify({results},null,2));
   console.log(JSON.stringify(results,null,2));
