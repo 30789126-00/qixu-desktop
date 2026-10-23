@@ -1,0 +1,55 @@
+{
+  "repo": "Xenova/nllb-200-distilled-600M",
+  "revision": "261c31d1a5732c67cdd16d80e8d6088507c7ccea",
+  "license": "CC-BY-NC-4.0",
+  "files": [
+    {
+      "name": "config.json",
+      "sha256": "52f035acb54ac80e5ef7fe78d6967f8ddf8e8799f078d1a92a2c8168d8ff4a20",
+      "bytes": 873,
+      "upstream": "6a498b9686cbb3a8f4bdb7b9111579a8b68d9a77"
+    },
+    {
+      "name": "generation_config.json",
+      "sha256": "1ce846259ae04c572ae1863e358534bbc376ff3d3f100b1494feda6200b51de8",
+      "bytes": 189,
+      "upstream": "e4e63ec8f93739e46bbed52cca2bde4477cf32b2"
+    },
+    {
+      "name": "tokenizer.json",
+      "sha256": "8ac789ad7dabea44d41537822d48c516ba358374c51813e2cba78c006e150c94",
+      "bytes": 17331224,
+      "upstream": "8ac789ad7dabea44d41537822d48c516ba358374c51813e2cba78c006e150c94"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "sha256": "ddf411c9f790d081e72de76bb8e8b714d74e160e61bc10c9bd8f56022dcd7fd7",
+      "bytes": 544,
+      "upstream": "9ee97ce45398eb1c4413a043b2d60e4ee730290b"
+    },
+    {
+      "name": "special_tokens_map.json",
+      "sha256": "992bd4ed610d644d6823081937bcc91bb8878dd556cea4ae5327f2480361330e",
+      "bytes": 3548,
+      "upstream": "02fba84e401dd2017999a39cac2c1278591c3a03"
+    },
+    {
+      "name": "sentencepiece.bpe.model",
+      "sha256": "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+      "bytes": 4852054,
+      "upstream": "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a"
+    },
+    {
+      "name": "onnx/encoder_model_quantized.onnx",
+      "sha256": "5cde664eacba07a62f198857ec6c06e09572b1ebb77c8137f1fa99ac604a3a28",
+      "bytes": 419120483,
+      "upstream": "5cde664eacba07a62f198857ec6c06e09572b1ebb77c8137f1fa99ac604a3a28"
+    },
+    {
+      "name": "onnx/decoder_model_merged_quantized.onnx",
+      "sha256": "dd66608c2a4194e78f95548fa0e64f24302303698c5b09fa8e1f9e16ec00676b",
+      "bytes": 475505771,
+      "upstream": "dd66608c2a4194e78f95548fa0e64f24302303698c5b09fa8e1f9e16ec00676b"
+    }
+  ]
+}

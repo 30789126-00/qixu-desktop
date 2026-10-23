@@ -1,0 +1,21 @@
+const {_electron}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),folder=path.resolve(root,'../test-runs','qixu-media-'+Date.now());fs.mkdirSync(folder,{recursive:true});
+let app,server,page;const results=[];const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const api=(method,...args)=>page.evaluate(({method,args})=>window.moyu[method](...args),{method,args});
+async function wait(fn){const start=Date.now();while(Date.now()-start<12000){if(await fn())return;await pause(60);}throw Error('Timed out');}
+async function main(){
+ const wave=Buffer.alloc(44+16000*30);wave.write('RIFF');wave.writeUInt32LE(wave.length-8,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(wave.length-44,40);
+ server=http.createServer((req,res)=>{if(req.url==='/audio'){res.setHeader('Content-Type','audio/wav');res.end(wave);}else{res.setHeader('Content-Type','text/html');res.end('<video controls loop src="/audio"></video>');}});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const url='http://127.0.0.1:'+server.address().port+'/';
+ app=await _electron.launch({args:[root],env:{...process.env,MOYU_TEST:'1',MOYU_DATA_DIR:path.join(folder,'data')}});page=await app.firstWindow();await page.waitForFunction(()=>!!window.moyu);await wait(async()=>(await api('getState')).todoReady);
+ await app.evaluate(({app})=>app.emit('qixu:test-native-key'));await page.getByLabel('访问口令').waitFor();await api('submitPassword','wsad');await api('updateSettings',{autoHide:false});
+ const state=await api('getState');await api('saveSources',[...state.sources,{id:'offline',title:'本地视频',kind:'video',url,color:'#5678ef',abbr:'测'}]);await api('openSource','offline');
+ const wc=()=>app.evaluate(async({webContents})=>{const w=webContents.getAllWebContents().find(w=>w.getURL().startsWith('http://127.0.0.1'));return w?{muted:w.isAudioMuted(),...await w.executeJavaScript('({paused:document.querySelector("video")?.paused,ready:document.querySelector("video")?.readyState})')}:null;});
+ await wait(async()=> (await wc())?.ready>=2);await api('mediaAction','play');await wait(async()=>(await wc())?.paused===false);assert.equal(await page.locator('.sidebar').count(),0);results.push({name:'验证后的视频播放与自动收栏',pass:true});
+ const bounds=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getBounds());const before=await bounds();await api('mediaAction','fullscreen',true);await pause(250);assert.deepEqual(await bounds(),before);await page.keyboard.press('Escape');await wait(async()=>!(await api('getState')).fullscreen);assert.deepEqual(await bounds(),before);results.push({name:'收栏后窗口内全屏及Esc尺寸恢复',pass:true});
+ await api('updateSettings',{autoHide:true});await app.evaluate(({screen,BrowserWindow})=>{const b=BrowserWindow.getAllWindows()[0].getBounds();globalThis.qixuCursor={x:b.x+30,y:b.y+30};screen.getCursorScreenPoint=()=>globalThis.qixuCursor;});await pause(900);
+ await app.evaluate(()=>{globalThis.qixuCursor={x:-10000,y:-10000};});await wait(async()=>(await api('getState')).windowState==='autoHidden');assert.equal((await wc()).muted,true);await wait(async()=>(await wc()).paused);
+ await app.evaluate(({BrowserWindow})=>{const b=BrowserWindow.getAllWindows()[0].getBounds();globalThis.qixuCursor={x:b.x+30,y:b.y+30};});await wait(async()=>(await api('getState')).windowState==='visible');await wait(async()=>(await wc()).paused===false);results.push({name:'验证会话内鼠标移出隐藏暂停、返回续播',pass:true});
+ await api('lockToTodo');assert.equal((await api('getState')).access,'todo');assert.equal(await wc(),null);await assert.rejects(api('openSource','offline'));results.push({name:'返回待办销毁播放器并阻止重新进入',pass:true});
+}
+main().catch(e=>{results.push({pass:false,error:String(e.stack||e)});console.error(e);process.exitCode=1;}).finally(async()=>{if(app)await app.close().catch(()=>{});if(server)await new Promise(r=>server.close(r));fs.writeFileSync(path.join(folder,'report.json'),JSON.stringify({results},null,2));console.log(JSON.stringify(results));console.log('Report:',path.join(folder,'report.json'));});

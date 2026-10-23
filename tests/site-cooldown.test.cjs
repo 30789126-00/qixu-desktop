@@ -1,0 +1,5 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),{buildSync}=require('esbuild'),path=require('node:path');
+function load(file){const code=buildSync({entryPoints:[path.resolve(__dirname,'..',file)],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;const m={exports:{}};new Function('require','module','exports',code)(require,m,m.exports);return m.exports;}
+const {sanitizeCooldowns,cooldownMessage,SITE_COOLDOWN_MS}=load('electron/site-cooldown.ts');
+test('Cooldown persistence rejects invalid entries and bounds the retry wait',()=>{const now=1000,s=sanitizeCooldowns({douyin:now+120000,old:1,invalid:'later',forever:Infinity,huge:1e15},now);assert.deepEqual(s,{douyin:121000,huge:now+SITE_COOLDOWN_MS});assert.match(cooldownMessage(s.douyin,now),/2 分钟/);assert.match(cooldownMessage(s.douyin,s.douyin+1),/手动尝试/);});
+test('YouTube ad skipping defaults on and respects saved user preference',()=>{const {sanitizeSettings}=load('electron/defaults.ts');assert.equal(sanitizeSettings({}).autoSkipYouTubeAds,true);assert.equal(sanitizeSettings({autoSkipYouTubeAds:false}).autoSkipYouTubeAds,false);});
