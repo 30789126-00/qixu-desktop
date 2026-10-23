@@ -27,7 +27,7 @@ const manageLoginItems=!testing||process.env.QIXU_TEST_LOGIN_ITEMS==='1';
 const dataDir = process.env.MOYU_DATA_DIR || path.join(app.getPath('appData'), 'Moyu');
 app.setPath('userData', dataDir);
 app.setAppUserModelId('com.moyu.desktop');
-const state: AppState = { bossKey:{configured:false,passwordRequired:true}, access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
+const state: AppState = { bossKeyPanel:false, bossKey:{configured:false,passwordRequired:true}, access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
   media:{ url:'', title:'', loading:false, error:'', playing:null, muted:false, status:'' }, notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},resume:{...emptyResumeState} };
 let windowMode:WindowMode='todo';
 let win: BrowserWindow;
@@ -86,6 +86,7 @@ const todoHost=new TodoHost(command=>{
   if(command==='UNLOCK'&&(!bossKeyConfig.configured||bossKeyConfig.legacyCtrlAlt||state.settings.shortcut==='Ctrl+Alt'))togglePrivate();
   else if(command==='HOTKEY_FAILED'){notice('Ctrl+Alt 全局监听未能启动，请使用托盘打开待办。');todoHost.send('STATUS:'+state.notice);}
   else if(command==='SHOW_TODO')showTodo();
+  else if(command==='BOSS_KEY_SETTINGS')openBossKeySettings();
   else if(command.startsWith('WIDGET_HOVER:'))widgetHovered=command.endsWith(':1');
   else if(testing&&command.startsWith('TEST_WINDOWS:'))app.emit('qixu:test-native-windows',command.slice(13));
   else if(command==='QUIT'){if(!quitting)app.quit();}
@@ -106,6 +107,7 @@ function loginDiagnostic(event:string,code?:number){if(testing)return;void fs.mk
 function publicState():AppState {return state.access==='private'?state:{...state,sources:[],books:[],activeSourceId:null,activeTabId:null,browserTabs:[],browserHistory:[],browserBookmarks:[],fullscreen:false,notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},media:{url:'',title:'',loading:false,error:'',playing:null,muted:true,status:''},resume:{...emptyResumeState}};}
 function emit() { if (win && !win.isDestroyed()) win.webContents.send('moyu:state', publicState());if(controlsView&&!controlsView.webContents.isDestroyed())controlsView.webContents.send('qixu:controls-state',{playing:state.media.playing,muted:state.media.muted});if(tray&&!tray.isDestroyed())tray.setToolTip(state.access==='private'?'栖序 · 单击恢复当前影音／小说，保留进度':'栖序 · 今日待办'); }
 function showTodo(message='',background=false) {
+  state.bossKeyPanel=false;
   if(!win||win.isDestroyed())return;
   clearPointerTransitionTimers();
   ++transitionVersion;pauseAll();
@@ -121,12 +123,17 @@ function showTodo(message='',background=false) {
   controlsView?.setVisible(false);win.hide();win.setSkipTaskbar(true);todoHost.send(background?'HIDE_ALL':'SHOW');if(message)todoHost.send('STATUS:'+message);emit();persist();
 }
 function requestUnlock() {
+  state.bossKeyPanel=false;
   if(state.access==='private')return;
   if(bossKeyConfig.configured&&!bossKeyConfig.passwordRequired){transition('REQUEST_UNLOCK');void enterPrivate();return;}
   if(state.access!=='prompt'){transition('REQUEST_UNLOCK');win.setOpacity(1);win.setAlwaysOnTop(true);win.setBounds(visibleBounds({ ...win.getBounds(),width:bossKeyConfig.configured?480:560,height:bossKeyConfig.configured?360:680}));win.center();win.setSkipTaskbar(true);emit();}
   win.show();win.focus();
 }
+function openBossKeySettings(){
+ showTodo();state.bossKeyPanel=true;win.setTitle('栖序 · 老板键');win.setOpacity(1);win.setAlwaysOnTop(false);win.setBounds(visibleBounds({...win.getBounds(),width:560,height:720}));win.center();win.setSkipTaskbar(false);emit();win.show();win.focus();
+}
 function togglePrivate(){
+  if(state.bossKeyPanel){showTodo();return;}
   if(state.access!=='private'){requestUnlock();return;}
   if(state.windowState!=='visible')restore();
   else hidePrivate();
@@ -402,12 +409,12 @@ async function updateSettings(patch:Partial<Settings>) {
 let bossKeySaveBusy=false;
 async function updateBossKey(patch:any){
  if(bossKeySaveBusy)throw Error('设置正在保存，请稍候');
- if(state.access!=='private'&&!(state.access==='prompt'&&!bossKeyConfig.configured))throw Error('请先完成访问验证');
+ if(state.access!=='private'&&!state.bossKeyPanel&&!(state.access==='prompt'&&!bossKeyConfig.configured))throw Error('请先打开待办中的老板键设置');
  if(!patch||typeof patch!=='object'||typeof patch.passwordRequired!=='boolean')throw Error('老板键设置格式无效');
  bossKeySaveBusy=true;
  try{
  const shortcut=normalizeBossShortcut(patch.shortcut);
- if(bossKeyConfig.configured&&bossKeyConfig.passwordRequired&&(patch.newPassword||!patch.passwordRequired)&&!await verifyBossPassword(patch.currentPassword,bossKeyConfig))throw Error('当前口令不正确');
+ if(bossKeyConfig.configured&&bossKeyConfig.passwordRequired&&(state.bossKeyPanel||patch.newPassword||!patch.passwordRequired)&&!await verifyBossPassword(patch.currentPassword,bossKeyConfig))throw Error('当前口令不正确');
  let record=bossKeyConfig.passwordRecord;
  if(patch.newPassword)record=await createPasswordRecord(patch.newPassword);
  if((!bossKeyConfig.configured||!bossKeyConfig.passwordRequired)&&patch.passwordRequired&&!record)throw Error('请为访问验证设置新口令');
@@ -651,7 +658,7 @@ async function start() {
   win.webContents.on('will-navigate',(event,url)=>{if(url!==homeUrl)event.preventDefault();});
   win.webContents.on('before-input-event',(event,input)=>{
     if(input.type!=='keyDown')return;
-    if(input.key==='Escape'){if(state.access==='prompt'){event.preventDefault();showTodo();}else if(state.fullscreen){event.preventDefault();void fullscreen(false);}return;}
+    if(input.key==='Escape'){if(state.bossKeyPanel){event.preventDefault();showTodo();return;}if(state.access==='prompt'){event.preventDefault();showTodo();}else if(state.fullscreen){event.preventDefault();void fullscreen(false);}return;}
     if(state.access==='private'&&input.control&&input.key==='Tab'){event.preventDefault();void switchRelativeTab(input.shift?-1:1);return;}
     if(state.access==='private'&&input.control&&String(input.key).toLowerCase()==='f'){event.preventDefault();win.webContents.send('moyu:browser-command','find');}
   });
@@ -708,13 +715,13 @@ async function start() {
   await controlsView.webContents.loadFile(path.join(__dirname,'../assets/fullscreen-controls.html'));
   if(testing)EventEmitter.prototype.on.call(app,'qixu:test-unlock',requestUnlock);
   if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-key',()=>todoHost.send('TEST_CTRL_ALT'));
-  if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-command',(command:string)=>{if(['TEST_WINDOWS','TEST_OPEN_LIST','TEST_CLOSE_WIDGET','TEST_GLOBAL_CTRL_ALT'].includes(command))todoHost.send(command);});
+  if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-command',(command:string)=>{if(['TEST_WINDOWS','TEST_OPEN_LIST','TEST_CLOSE_WIDGET','TEST_GLOBAL_CTRL_ALT','TEST_OPEN_BOSS_KEY'].includes(command))todoHost.send(command);});
   const nativeExe=app.isPackaged?path.join(process.resourcesPath,'native','TodoHost.exe'):path.join(__dirname,'../native/TodoHost.exe');
   await todoHost.start(nativeExe,dataDir,process.execPath,state.settings.launchAtLogin,process.argv.includes('--autostart'),testing);
-  state.todoReady=true;if(!bossKeyConfig.configured)requestUnlock();if(state.notice)todoHost.send('STATUS:'+state.notice);emit();
+  state.todoReady=true;if(process.argv.includes('--boss-key-settings'))openBossKeySettings();else if(!bossKeyConfig.configured)requestUnlock();if(state.notice)todoHost.send('STATUS:'+state.notice);emit();
 }
 if(!testing&&!app.requestSingleInstanceLock())app.quit();else {
-  app.on('second-instance',(_event,args)=>{if(args.includes('--quit')){quitting=true;app.quit();}else if(state.access==='private')restore();else showTodo();});app.whenReady().then(()=>{if(process.argv.includes('--quit')){app.exit(0);return;}return start();}).catch(async err=>{await fs.mkdir(dataDir,{recursive:true});await fs.writeFile(path.join(dataDir,'startup-error.log'),String(err.stack||err));if(!testing)dialog.showErrorBox('栖序启动失败',String(err));app.exit(1);});
+  app.on('second-instance',(_event,args)=>{if(args.includes('--quit')){quitting=true;app.quit();}else if(args.includes('--boss-key-settings'))openBossKeySettings();else if(state.access==='private')restore();else showTodo();});app.whenReady().then(()=>{if(process.argv.includes('--quit')){app.exit(0);return;}return start();}).catch(async err=>{await fs.mkdir(dataDir,{recursive:true});await fs.writeFile(path.join(dataDir,'startup-error.log'),String(err.stack||err));if(!testing)dialog.showErrorBox('栖序启动失败',String(err));app.exit(1);});
   app.on('window-all-closed',()=>{if(quitting)app.quit();});
   let cleanupStarted=false;
   app.on('before-quit',event=>{if(cleanupStarted)return;event.preventDefault();cleanupStarted=true;quitting=true;globalShortcut.unregisterAll();++transitionVersion;translator.stop();void pauseAll().then(async()=>{persist(true);checkpointSession(true,true);await Promise.all([persistQueue,checkpointQueue,todoHost.stop(),flushSessions()]);}).finally(()=>{for(const popup of popups)if(!popup.isDestroyed())popup.destroy();for(const tab of runtimeTabs.values())if(!tab.view.webContents.isDestroyed())tab.view.webContents.close();runtimeTabs.clear();tabOrder.length=0;tray?.destroy();app.quit();});});

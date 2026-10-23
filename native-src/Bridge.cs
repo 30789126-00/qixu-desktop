@@ -138,6 +138,7 @@ public static class ManagedBridge {
    if(command=="TEST_WINDOWS")Send("TEST_WINDOWS:"+window.BridgeWindowStatus());
    if(command=="TEST_OPEN_LIST")window.BridgeRestore();
    if(command=="TEST_CLOSE_WIDGET")window.BridgeCloseWidget();
+   if(command=="TEST_OPEN_BOSS_KEY")window.BridgeBossKeyButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
   }
   if(command=="SHOW") { PrivateMode=false;foreach(var w in hidden)try{w.Show();}catch{}hidden.Clear();window.BridgeRestore(); }
   else if(command=="ENTER_PRIVATE") {PrivateMode=true;window.Hide();}
