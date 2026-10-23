@@ -8,7 +8,8 @@ import JSZip from 'jszip';
 import type { AppState, Book, Settings, Source, Rect, WindowState, ResumeState, BrowserTab, BrowserHistoryEntry, BrowserBookmark, MediaState } from '../shared/types';
 import { defaultSettings, defaultSources, sanitizeSettings, safeUrl, clamp, migrateSources13, ensurePermanentSources } from './defaults';
 import { controlMedia } from './media';
-import { verifyPassword } from './auth';
+import { loadBossKey, normalizeBossShortcut, createPasswordRecord, verifyBossPassword, type BossKeyConfig } from './boss-key';
+let bossKeyConfig:BossKeyConfig=loadBossKey(null,false);
 import { TodoHost } from './todo-host';
 import { readStartup,writeStartup,reconcileStartup } from './startup';
 import { EventEmitter } from 'node:events';
@@ -26,7 +27,7 @@ const manageLoginItems=!testing||process.env.QIXU_TEST_LOGIN_ITEMS==='1';
 const dataDir = process.env.MOYU_DATA_DIR || path.join(app.getPath('appData'), 'Moyu');
 app.setPath('userData', dataDir);
 app.setAppUserModelId('com.moyu.desktop');
-const state: AppState = { access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
+const state: AppState = { bossKey:{configured:false,passwordRequired:true}, access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
   media:{ url:'', title:'', loading:false, error:'', playing:null, muted:false, status:'' }, notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},resume:{...emptyResumeState} };
 let windowMode:WindowMode='todo';
 let win: BrowserWindow;
@@ -82,7 +83,7 @@ function checkpointSession(cleanExit=false,immediate=false){
   if(immediate)write();else checkpointTimer=setTimeout(write,700);
 }
 const todoHost=new TodoHost(command=>{
-  if(command==='UNLOCK')togglePrivate();
+  if(command==='UNLOCK'&&(!bossKeyConfig.configured||bossKeyConfig.legacyCtrlAlt||state.settings.shortcut==='Ctrl+Alt'))togglePrivate();
   else if(command==='HOTKEY_FAILED'){notice('Ctrl+Alt 全局监听未能启动，请使用托盘打开待办。');todoHost.send('STATUS:'+state.notice);}
   else if(command==='SHOW_TODO')showTodo();
   else if(command.startsWith('WIDGET_HOVER:'))widgetHovered=command.endsWith(':1');
@@ -121,7 +122,8 @@ function showTodo(message='',background=false) {
 }
 function requestUnlock() {
   if(state.access==='private')return;
-  if(state.access!=='prompt'){transition('REQUEST_UNLOCK');win.setOpacity(1);win.setAlwaysOnTop(true);win.setBounds(visibleBounds({ ...win.getBounds(),width:480,height:360}));win.center();win.setSkipTaskbar(true);emit();}
+  if(bossKeyConfig.configured&&!bossKeyConfig.passwordRequired){transition('REQUEST_UNLOCK');void enterPrivate();return;}
+  if(state.access!=='prompt'){transition('REQUEST_UNLOCK');win.setOpacity(1);win.setAlwaysOnTop(true);win.setBounds(visibleBounds({ ...win.getBounds(),width:bossKeyConfig.configured?480:560,height:bossKeyConfig.configured?360:680}));win.center();win.setSkipTaskbar(true);emit();}
   win.show();win.focus();
 }
 function togglePrivate(){
@@ -131,8 +133,12 @@ function togglePrivate(){
 }
 function hidePrivate(){hide('panicHidden');win.setSkipTaskbar(true);}
 async function submitPassword(password:unknown) {
-  if(state.access!=='prompt')throw new Error('请先在待办界面按 Ctrl+Alt');
-  if(!verifyPassword(password)){showTodo('已返回待办。');return false;}
+  if(state.access!=='prompt')throw new Error('请先使用切换快捷键打开访问验证');
+  if(!bossKeyConfig.configured)throw Error('请先完成老板键设置');
+  if(!await verifyBossPassword(password,bossKeyConfig)){showTodo('已返回待办。');return false;}
+  return enterPrivate();
+}
+async function enterPrivate(){
   transition('UNLOCK_OK');state.section=state.resume.section;state.activeSourceId=state.resume.activeSourceId;todoHost.send('ENTER_PRIVATE');win.setSkipTaskbar(false);
   win.setBounds(visibleBounds(rememberedBounds));win.setOpacity(state.settings.opacity);win.setAlwaysOnTop(state.settings.alwaysOnTop);
   graceUntil=Date.now()+RESTORE_GRACE_MS;emit();win.show();win.focus();
@@ -148,7 +154,7 @@ function notice(text: string) { state.notice = text; emit(); }
 function persist(immediate=false) {
   clearTimeout(saveTimer);
   const write = () => {
-    const snapshot = structuredClone({ settings:state.settings, sources:state.sources, books:state.books, bounds:rememberedBounds,sourceCooldowns,sourceRevision:13,stateRevision:18,resume:state.resume,browserHistory:state.browserHistory,browserBookmarks:state.browserBookmarks });
+    const snapshot = structuredClone({ settings:state.settings, bossKey:bossKeyConfig, sources:state.sources, books:state.books, bounds:rememberedBounds,sourceCooldowns,sourceRevision:13,stateRevision:18,resume:state.resume,browserHistory:state.browserHistory,browserBookmarks:state.browserBookmarks });
     persistQueue = persistQueue.then(async()=>{
       await saveDurableState(settingsPath,snapshot);
     }).catch(err=>{state.notice=`保存失败：${err.message}`;emit();});
@@ -160,6 +166,8 @@ async function load() {
   try {
     const loaded=await loadDurableState(settingsPath);const saved:any=loaded.data||{};
     state.settings=sanitizeSettings(saved.settings||{});
+    bossKeyConfig=loadBossKey(saved.bossKey,!!loaded.data||(testing&&process.env.QIXU_TEST_FIRST_RUN!=='1'));
+    state.bossKey={configured:bossKeyConfig.configured,passwordRequired:bossKeyConfig.passwordRequired};
     sourceCooldowns=sanitizeCooldowns(saved.sourceCooldowns);
     if(Array.isArray(saved.sources))state.sources=validateSources(saved.sources);
     if(saved.sourceRevision!==13)state.sources=migrateSources13(state.sources);
@@ -269,7 +277,7 @@ function pauseAll() {
   const tabJobs=[...runtimeTabs.values()].map(async tab=>({tab,values:await controlMedia(tab.view.webContents,'pause',tab.platform,true)}));
   const popupJobs=[...popups].filter(p=>!p.isDestroyed()).map(async popup=>({tab:null,values:await controlMedia(popup.webContents,'pause',activePlatform,true)}));
   for(const tab of runtimeTabs.values())if(tab.id===activeTabId)tab.resumeOnActivate=wasPlaying;else if(tab.media.playing===true)tab.resumeOnActivate=true;
-  void Promise.all([...tabJobs,...popupJobs]).then(results=>{
+  return Promise.all([...tabJobs,...popupJobs]).then(results=>{
     if(version!==transitionVersion)return;
     for(const item of results)if(item.tab){item.tab.media.playing=item.values.length?item.values.some(value=>value.playing):false;}
     const values=results.flatMap(item=>item.values);
@@ -368,11 +376,13 @@ function pollMouse() {
   if(hideArmed)scheduleAutoHideVerification();
 }
 function registerShortcut(shortcut:string) {
+  if(shortcut==='Ctrl+Alt')return true;
   try {return globalShortcut.register(shortcut,()=>togglePrivate());}catch{return false;}
 }
 async function updateSettings(patch:Partial<Settings>) {
   if(!patch||typeof patch!=='object')throw new Error('设置格式无效');
   const next=sanitizeSettings(patch,state.settings);
+  if(Object.hasOwn(patch,'shortcut'))throw Error('请在老板键中修改切换快捷键');
   if(next.shortcut!==state.settings.shortcut){
     if(!registerShortcut(next.shortcut))throw new Error('快捷键无效或已被占用，请换一组组合键');
     globalShortcut.unregister(state.settings.shortcut);
@@ -388,6 +398,29 @@ async function updateSettings(patch:Partial<Settings>) {
   for(const popup of popups)if(!popup.isDestroyed())popup.setOpacity(next.opacity);
   if(!next.autoHide&&state.windowState==='autoHidden')restore();
   graceUntil=Date.now()+500;persist();emit();return publicState();
+}
+let bossKeySaveBusy=false;
+async function updateBossKey(patch:any){
+ if(bossKeySaveBusy)throw Error('设置正在保存，请稍候');
+ if(state.access!=='private'&&!(state.access==='prompt'&&!bossKeyConfig.configured))throw Error('请先完成访问验证');
+ if(!patch||typeof patch!=='object'||typeof patch.passwordRequired!=='boolean')throw Error('老板键设置格式无效');
+ bossKeySaveBusy=true;
+ try{
+ const shortcut=normalizeBossShortcut(patch.shortcut);
+ if(bossKeyConfig.configured&&bossKeyConfig.passwordRequired&&(patch.newPassword||!patch.passwordRequired)&&!await verifyBossPassword(patch.currentPassword,bossKeyConfig))throw Error('当前口令不正确');
+ let record=bossKeyConfig.passwordRecord;
+ if(patch.newPassword)record=await createPasswordRecord(patch.newPassword);
+ if((!bossKeyConfig.configured||!bossKeyConfig.passwordRequired)&&patch.passwordRequired&&!record)throw Error('请为访问验证设置新口令');
+ if(shortcut!==state.settings.shortcut&&!registerShortcut(shortcut))throw Error('快捷键无效或已被占用，请换一组组合键');
+ const oldShortcut=state.settings.shortcut;
+ state.settings.shortcut=shortcut;
+ bossKeyConfig={configured:true,passwordRequired:patch.passwordRequired,legacyCtrlAlt:false,passwordRecord:record};
+ state.bossKey={configured:true,passwordRequired:patch.passwordRequired};
+ if(oldShortcut!==shortcut&&oldShortcut!=='Ctrl+Alt')globalShortcut.unregister(oldShortcut);
+ persist(true);await persistQueue;emit();
+ if(state.access==='prompt')showTodo('设置已保存，使用切换快捷键进入。');
+ return publicState();
+ }finally{bossKeySaveBusy=false;}
 }
 function configureSession(partition:string) {
   if(sessionsConfigured.has(partition))return;
@@ -466,7 +499,7 @@ function wireRemote(wc:WebContents, popup?:BrowserWindow,tabId?:string) {
 async function navigateEmbedded(url:string){
  const contents=mediaView?.webContents;if(!contents||state.access!=='private')return;
  const target=safeUrl(url,testing);if(state.fullscreen)await fullscreen(false);
- if(mediaView?.webContents!==contents)return;
+ if(quitting||mediaView?.webContents!==contents)return;
  ++transitionVersion;pendingMediaRestore=null;updateResume({mediaUrl:target,mediaTime:0,mediaWasPlaying:false});await controlMedia(contents,'pause',activePlatform,true);void flushSessions();void contents.loadURL(target).catch(()=>{});
 }
 async function openSource(id:string,url?:string,restoring=false) {
@@ -593,7 +626,7 @@ async function saveBook(id:string,patch:any){
 const handlers: Record<string, (...args:any[])=>any> = {
   setLoginMode:(enabled:boolean)=>{state.loginMode=enabled===true;clearPointerTransitionTimers();graceUntil=Date.now()+1000;if(state.loginMode&&state.windowState==='autoHidden')restore();loginDiagnostic(state.loginMode?'login-mode-start':'login-mode-end');if(!state.loginMode)void flushSessions();emit();},
   translationAction:async(action:string)=>{if(action==='retry'){cancelBrowserTranslation();translator.stop();state.translation.error='';state.translation.model='idle';}else if(action==='toggleSite'&&mediaView){const host=new URL(mediaView.webContents.getURL()).hostname;const sites=state.settings.translationDisabledSites;await updateSettings({translationDisabledSites:sites.includes(host)?sites.filter(s=>s!==host):[...sites,host]});cancelBrowserTranslation();}emit();},
-  getState:()=>publicState(),updateSettings,submitPassword,cancelUnlock:()=>showTodo(),lockToTodo:()=>showTodo(),
+  getState:()=>publicState(),updateBossKey,updateSettings,submitPassword,cancelUnlock:()=>showTodo(),lockToTodo:()=>showTodo(),
   windowAction:(action:string)=>{if(action==='hide'||action==='close'){if(state.access==='private'){if(state.windowState!=='panicHidden')hidePrivate();}else showTodo();return;}if(action==='restore')restore();if(action==='minimize'){hide('minimized');win.minimize();}if(action==='maximize'){if(win.isMaximized())win.unmaximize();else win.maximize();}if(action==='fullscreen')void mediaAction('fullscreen');},
   setSection:(section:string)=>{if(!['video','library','settings'].includes(section))throw new Error('页面不存在');if(state.fullscreen)fullscreen(false);++transitionVersion;state.section=section as AppState['section'];updateResume({section:state.section,activeBookId:section==='library'?state.resume.activeBookId:null});if(section!=='video'){pauseAll();translator.stop();state.translation.model='idle';}layout();emit();if(section==='video')void resumeMedia();},
   setViewport:(rect:Rect|null)=>{const wasBlocked=isBlocked();if(rect && ['x','y','width','height'].every(k=>Number.isFinite((rect as any)[k])))viewport=rect;else viewport=null;layout();if(isBlocked()){if(!wasBlocked){++transitionVersion;pauseAll();}}else if(wasBlocked){++transitionVersion;void resumeMedia();}},
@@ -625,7 +658,7 @@ async function start() {
   ipcMain.handle('moyu:invoke',(event,method,...args)=>{
     if(event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('请求来源无效');
     if(typeof method!=='string'||!Object.hasOwn(handlers,method))throw new Error('不支持的操作');
-    if(state.access!=='private'&&!['getState','submitPassword','cancelUnlock','lockToTodo','windowAction','setViewport'].includes(method)){
+    if(state.access!=='private'&&!['getState','submitPassword','cancelUnlock','lockToTodo','windowAction','setViewport','updateBossKey'].includes(method)){
       if(method==='saveBook'&&Date.now()<progressFlushUntil&&args[1]?.progress&&!args[1]?.bookmarks)return saveBook(args[0],{progress:args[1].progress});
       throw new Error('请先完成访问验证');
     }
@@ -653,7 +686,7 @@ async function start() {
     for(const [popup,controller] of popupTranslators)if(!popup.isDestroyed()&&popup.isVisible())void controller.tick(popup.webContents,state.settings,true);
   }},450);translationTimer.unref();
   const mediaTimer=setInterval(async()=>{
-    if(statusBusy||!mediaView||mediaView.webContents.isDestroyed())return;
+    if(quitting||statusBusy||!mediaView||mediaView.webContents.isDestroyed())return;
     statusBusy=true;
     try {setAudioGuard();const contents=mediaView.webContents;const platform=activePlatform;if(!isBlocked())await applyPendingMediaRestore(contents);
       const values=(await Promise.all((platform==='douyin'?allContents():[contents]).map(wc=>controlMedia(wc,isBlocked()?'pause':'status',platform,isBlocked())))).flat();
@@ -678,11 +711,11 @@ async function start() {
   if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-command',(command:string)=>{if(['TEST_WINDOWS','TEST_OPEN_LIST','TEST_CLOSE_WIDGET','TEST_GLOBAL_CTRL_ALT'].includes(command))todoHost.send(command);});
   const nativeExe=app.isPackaged?path.join(process.resourcesPath,'native','TodoHost.exe'):path.join(__dirname,'../native/TodoHost.exe');
   await todoHost.start(nativeExe,dataDir,process.execPath,state.settings.launchAtLogin,process.argv.includes('--autostart'),testing);
-  state.todoReady=true;if(state.notice)todoHost.send('STATUS:'+state.notice);emit();
+  state.todoReady=true;if(!bossKeyConfig.configured)requestUnlock();if(state.notice)todoHost.send('STATUS:'+state.notice);emit();
 }
 if(!testing&&!app.requestSingleInstanceLock())app.quit();else {
   app.on('second-instance',(_event,args)=>{if(args.includes('--quit')){quitting=true;app.quit();}else if(state.access==='private')restore();else showTodo();});app.whenReady().then(()=>{if(process.argv.includes('--quit')){app.exit(0);return;}return start();}).catch(async err=>{await fs.mkdir(dataDir,{recursive:true});await fs.writeFile(path.join(dataDir,'startup-error.log'),String(err.stack||err));if(!testing)dialog.showErrorBox('栖序启动失败',String(err));app.exit(1);});
   app.on('window-all-closed',()=>{if(quitting)app.quit();});
   let cleanupStarted=false;
-  app.on('before-quit',event=>{if(cleanupStarted)return;event.preventDefault();cleanupStarted=true;quitting=true;globalShortcut.unregisterAll();++transitionVersion;pauseAll();translator.stop();persist(true);checkpointSession(true,true);void Promise.all([persistQueue,checkpointQueue,todoHost.stop(),flushSessions()]).finally(()=>{for(const popup of popups)if(!popup.isDestroyed())popup.destroy();for(const tab of runtimeTabs.values())if(!tab.view.webContents.isDestroyed())tab.view.webContents.close();runtimeTabs.clear();tabOrder.length=0;tray?.destroy();app.quit();});});
+  app.on('before-quit',event=>{if(cleanupStarted)return;event.preventDefault();cleanupStarted=true;quitting=true;globalShortcut.unregisterAll();++transitionVersion;translator.stop();void pauseAll().then(async()=>{persist(true);checkpointSession(true,true);await Promise.all([persistQueue,checkpointQueue,todoHost.stop(),flushSessions()]);}).finally(()=>{for(const popup of popups)if(!popup.isDestroyed())popup.destroy();for(const tab of runtimeTabs.values())if(!tab.view.webContents.isDestroyed())tab.view.webContents.close();runtimeTabs.clear();tabOrder.length=0;tray?.destroy();app.quit();});});
 }

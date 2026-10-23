@@ -10,7 +10,7 @@
 
 [下载安装](https://github.com/30789126-00/qixu-desktop/releases/latest) · [功能说明](docs/使用说明.md) · [反馈建议](https://github.com/30789126-00/qixu-desktop/issues) · [English](README_EN.md)
 
-![Windows](https://img.shields.io/badge/Windows-10%2F11-3277b3?style=flat-square) ![Version](https://img.shields.io/badge/version-1.7.1-7a59d1?style=flat-square) ![Electron](https://img.shields.io/badge/Electron-%2B_React-%236f86ad?style=flat-square) ![Model](https://img.shields.io/badge/%E6%9C%AC%E5%9C%B0%E7%BF%BB%E8%AF%91-CPU-%239ed8ad?style=flat-square)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-3277b3?style=flat-square) ![Version](https://img.shields.io/badge/version-1.7.2-7a59d1?style=flat-square) ![Electron](https://img.shields.io/badge/Electron-%2B_React-%236f86ad?style=flat-square) ![Model](https://img.shields.io/badge/%E6%9C%AC%E5%9C%B0%E7%BF%BB%E8%AF%91-CPU-%239ed8ad?style=flat-square)
 
 </div>
 
@@ -30,6 +30,8 @@
 <p align="center"><img src="docs/images/qixu-widget.png" width="330" alt="栖序桌面小组件：演示数据" /></p>
 
 ## 为顺手使用打磨的细节
+
+- **老板键，按自己的习惯：** 首次使用可自定义切换快捷键、口令与免验证；以后在「设置 → 老板键」随时调整。
 
 - **轻巧隐藏与恢复：** 一组快捷键收起影音窗口；支持鼠标移出自动隐藏、停留恢复，隐藏时暂停播放并静音。窗口的位置和尺寸会保留。
 - **窗口内全屏：** 视频占满栖序的内容区域，退出后恢复原窗口尺寸；提供悬浮式播放、暂停与退出控制。不同站点的网页播放器行为可能有差异。
@@ -69,7 +71,7 @@ npm run package
 
 ## 版本与反馈
 
-当前公开版：**v1.7.1**。重点是窗口状态、影音隐藏恢复、多标签、播放和阅读位置持久化，以及 Windows 安装位置兼容。完整信息见 [更新记录](CHANGELOG.md) 和 [使用说明](docs/使用说明.md)。
+当前公开版：**v1.7.2**。重点是窗口状态、影音隐藏恢复、多标签、播放和阅读位置持久化，以及 Windows 安装位置兼容。完整信息见 [更新记录](CHANGELOG.md) 和 [使用说明](docs/使用说明.md)。
 
 欢迎在 [Issues](https://github.com/30789126-00/qixu-desktop/issues) 提交 Bug、交互建议或站点适配问题。反馈时请勿附上账户 Cookie、书籍原文、个人任务清单或其他隐私文件。
 

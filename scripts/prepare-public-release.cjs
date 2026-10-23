@@ -44,7 +44,7 @@ async function main() {
     compressionOptions: { level: 9 },
   }));
   await fs.copyFile(srcInstaller, path.join(output, installer));
-  await fs.copyFile(path.join(root, 'docs/release-notes-1.7.1.md'), path.join(output, `Qixu-Release-${version}.md`));
+  await fs.copyFile(path.join(root, `docs/release-notes-${version}.md`), path.join(output, `Qixu-Release-${version}.md`));
 
   const names = [installer, archive, `Qixu-Release-${version}.md`];
   const lines = [];

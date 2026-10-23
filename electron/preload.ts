@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { AppAPI, AppState } from '../shared/types';
 const invoke = (method: string, ...args: unknown[]) => ipcRenderer.invoke('moyu:invoke', method, ...args);
 const api: AppAPI = {
+  updateBossKey: patch=>invoke('updateBossKey',patch),
   submitPassword: password=>invoke('submitPassword',password),
   cancelUnlock: ()=>invoke('cancelUnlock'),
   setLoginMode: enabled=>invoke('setLoginMode',enabled),

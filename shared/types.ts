@@ -26,9 +26,12 @@ export interface ResumeState {
   activeBookId: string | null;
   recoveredAfterCrash: boolean;
 }
-export interface AppState { access: 'todo'|'prompt'|'private'; todoReady: boolean; settings: Settings; sources: Source[]; books: Book[]; section: Section; activeSourceId: string | null; activeTabId: string | null; browserTabs: BrowserTab[]; browserHistory: BrowserHistoryEntry[]; browserBookmarks: BrowserBookmark[]; windowState: WindowState; fullscreen: boolean; media: MediaState; notice: string; loginMode: boolean; translation: TranslationState; resume: ResumeState; }
+export interface BossKeyState { configured:boolean; passwordRequired:boolean; }
+export interface BossKeyUpdate { shortcut:string; passwordRequired:boolean; currentPassword?:string; newPassword?:string; }
+export interface AppState { bossKey:BossKeyState; access: 'todo'|'prompt'|'private'; todoReady: boolean; settings: Settings; sources: Source[]; books: Book[]; section: Section; activeSourceId: string | null; activeTabId: string | null; browserTabs: BrowserTab[]; browserHistory: BrowserHistoryEntry[]; browserBookmarks: BrowserBookmark[]; windowState: WindowState; fullscreen: boolean; media: MediaState; notice: string; loginMode: boolean; translation: TranslationState; resume: ResumeState; }
 export interface Rect { x: number; y: number; width: number; height: number; }
 export interface AppAPI {
+  updateBossKey(patch:BossKeyUpdate):Promise<AppState>;
   submitPassword(password: string): Promise<boolean>;
   cancelUnlock(): Promise<void>;
   lockToTodo(): Promise<void>;
