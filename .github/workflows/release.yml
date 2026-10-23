@@ -1,0 +1,53 @@
+name: Publish Windows release
+on:
+  push:
+    paths: ['.github/workflows/release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Fetch and verify pinned translation model
+        shell: pwsh
+        run: |
+          $modelScript = Get-Content scripts/prepare-models.cjs -Raw
+          $modelScript.Replace('https://hf-mirror.com','https://huggingface.co') | Set-Content scripts/prepare-models.cjs -Encoding utf8
+          node scripts/prepare-models.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git restore scripts/prepare-models.cjs models/manifest.json models/MODEL-LICENSE-AND-CARD.md
+      - run: npm run package
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Prepare public assets
+        run: node scripts/prepare-public-release.cjs
+      - name: Publish and validate installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          $out = (Resolve-Path ../../outputs).Path
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) { gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "栖序 $version · 今日有序，片刻从容" --notes-file "docs/release-notes-$version.md" }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release upload $tag "$out/Qixu-Setup-$version-x64.exe" "$out/Qixu-source-$version.zip" "$out/Qixu-SHA256SUMS-$version.txt" --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $verify = Join-Path $env:RUNNER_TEMP 'verify-download'
+          New-Item -ItemType Directory -Force -Path $verify | Out-Null
+          gh release download $tag --pattern "Qixu-Setup-$version-x64.exe" --dir $verify --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $original = (Get-FileHash "$out/Qixu-Setup-$version-x64.exe" -Algorithm SHA256).Hash
+          $downloaded = (Get-FileHash "$verify/Qixu-Setup-$version-x64.exe" -Algorithm SHA256).Hash
+          if ($original -ne $downloaded) { throw 'Downloaded installer SHA256 mismatch' }
+          "Installer download verified: $downloaded" | Out-File -Append $env:GITHUB_STEP_SUMMARY
