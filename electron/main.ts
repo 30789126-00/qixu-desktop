@@ -46,6 +46,9 @@ const AUTO_RESTORE_VERIFY_MS = 45;
 const RESTORE_GRACE_MS = 220;
 let pendingAutoHide: NodeJS.Timeout | undefined;
 let pendingAutoRestore: NodeJS.Timeout | undefined;
+let pendingBlurHide: NodeJS.Timeout | undefined;
+let blurAutoHidden = false;
+let restoreNeedsExit = false;
 let dialogDepth = 0;
 let transitionVersion = 0;
 let progressFlushUntil=0;
@@ -111,6 +114,8 @@ function showTodo(message='',background=false) {
   state.bossKeyPanel=false;
   if(!win||win.isDestroyed())return;
   clearPointerTransitionTimers();
+  if(pendingBlurHide)clearTimeout(pendingBlurHide);
+  blurAutoHidden=false;restoreNeedsExit=false;
   ++transitionVersion;pauseAll();
   translator.stop();state.translation.model='idle';
   state.loginMode=false;void flushSessions();
@@ -148,6 +153,7 @@ async function submitPassword(password:unknown) {
   return enterPrivate();
 }
 async function enterPrivate(){
+  blurAutoHidden=false;restoreNeedsExit=false;
   transition('UNLOCK_OK');state.section=state.resume.section;state.activeSourceId=state.resume.activeSourceId;todoHost.send('ENTER_PRIVATE');win.setSkipTaskbar(false);
   win.setBounds(visibleBounds(rememberedBounds));win.setOpacity(state.settings.opacity);win.setAlwaysOnTop(state.settings.alwaysOnTop);
   graceUntil=Date.now()+RESTORE_GRACE_MS;emit();win.show();win.focus();
@@ -307,6 +313,7 @@ async function resumeMedia() {
 function hide(kind: WindowState='panicHidden') {
   if(!win||win.isDestroyed())return;
   clearPointerTransitionTimers();
+  if(kind!=='autoHidden'){blurAutoHidden=false;restoreNeedsExit=false;}
   ++transitionVersion;
   if(kind==='autoHidden')transition('AUTO_HIDE');else if(kind==='minimized')transition('MINIMIZE');else if(kind==='suspended')transition('SUSPEND');else transition('PANIC_HIDE');
   recoveryRegions=[win.getBounds(),...[...popups].filter(p=>!p.isDestroyed()&&p.isVisible()).map(p=>p.getBounds())];
@@ -320,7 +327,7 @@ function hide(kind: WindowState='panicHidden') {
 function restore(focus=true) {
   if(!win||win.isDestroyed())return;
   if(state.access!=='private'){showTodo();return;}
-  clearPointerTransitionTimers();
+  clearPointerTransitionTimers();blurAutoHidden=false;restoreNeedsExit=false;
   ++transitionVersion;transition('RESTORE');graceUntil=Date.now()+RESTORE_GRACE_MS;recoveryRegions=[];
   if(win.isMinimized())win.restore();
   win.setSkipTaskbar(false);
@@ -358,7 +365,7 @@ function scheduleAutoRestoreVerification(){
   if(pendingAutoRestore)return;
   pendingAutoRestore=setTimeout(()=>{
     pendingAutoRestore=undefined;
-    if(!win||win.isDestroyed()||state.access!=='private'||!state.settings.autoHide||state.loginMode||state.windowState!=='autoHidden')return;
+    if(!win||win.isDestroyed()||state.access!=='private'||(!state.settings.autoHide&&!blurAutoHidden)||state.loginMode||state.windowState!=='autoHidden')return;
     if(pointerInsideRecovery(screen.getCursorScreenPoint()))restore(true);
   },AUTO_RESTORE_VERIFY_MS);
 }
@@ -370,14 +377,18 @@ function setWindowBoundsExact(target:Rectangle){
   if(!same(actual,target))win.setBounds({x:target.x+(target.x-actual.x),y:target.y+(target.y-actual.y),width:target.width+(target.width-actual.width),height:target.height+(target.height-actual.height)});
 }
 function pollMouse() {
-  if(!win||win.isDestroyed()||state.access!=='private'||!state.settings.autoHide||state.loginMode){clearPointerTransitionTimers();return;}
+  if(!win||win.isDestroyed()||state.access!=='private'||state.loginMode||(!state.settings.autoHide&&!blurAutoHidden)){clearPointerTransitionTimers();return;}
   const now=Date.now();const cursor=screen.getCursorScreenPoint();
   if(state.windowState==='autoHidden'){
     clearAutoHideTimer();
-    if(pointerInsideRecovery(cursor))scheduleAutoRestoreVerification();else clearAutoRestoreTimer();
+    const inRecovery=pointerInsideRecovery(cursor);
+    // A blur hide must not immediately pop back over the app the user just clicked.
+    if(restoreNeedsExit){if(!inRecovery)restoreNeedsExit=false;clearAutoRestoreTimer();return;}
+    if(inRecovery)scheduleAutoRestoreVerification();else clearAutoRestoreTimer();
     return;
   }
   clearAutoRestoreTimer();
+  if(!state.settings.autoHide){clearAutoHideTimer();return;}
   if(state.windowState!=='visible'||win.isMinimized()||dialogDepth){clearAutoHideTimer();return;}
   const within=pointerInsideVisibleApp(cursor);
   if(within){hideArmed=true;clearAutoHideTimer();return;}
@@ -677,6 +688,20 @@ async function start() {
   const remember=()=>{if(state.access==='private'&&!win.isDestroyed()&&!win.isMinimized()&&!state.fullscreen){rememberedBounds=win.getBounds();persist();}graceUntil=Date.now()+650;layout();};
   win.on('move',remember);win.on('resize',remember);
   win.on('will-move',()=>{graceUntil=Date.now()+1500;});win.on('will-resize',()=>{graceUntil=Date.now()+1500;});
+  // With pin disabled, moving focus to another application quietly suspends video.
+  // Ignore the app's own login and media popups; they remain part of this window.
+  win.on('focus',()=>{if(pendingBlurHide){clearTimeout(pendingBlurHide);pendingBlurHide=undefined;}});
+  win.on('blur',()=>{
+    if(pendingBlurHide)clearTimeout(pendingBlurHide);
+    if(state.access!=='private'||state.windowState!=='visible'||state.settings.alwaysOnTop||state.loginMode||dialogDepth)return;
+    pendingBlurHide=setTimeout(()=>{
+      pendingBlurHide=undefined;
+      if(!win||win.isDestroyed()||state.access!=='private'||state.windowState!=='visible'||state.settings.alwaysOnTop||state.loginMode||dialogDepth||win.isFocused())return;
+      const focused=BrowserWindow.getFocusedWindow();
+      if(focused===win||[...popups].some(p=>!p.isDestroyed()&&(p===focused||p.isFocused())))return;
+      blurAutoHidden=true;restoreNeedsExit=true;hide('autoHidden');
+    },160);
+  });
   win.on('minimize',()=>{if(state.windowState!=='minimized')hide('minimized');});
   win.on('restore',()=>{if(state.windowState==='minimized')restore();});
   win.on('close',event=>{if(!quitting){event.preventDefault();if(state.access==='private'){if(state.windowState!=='panicHidden')togglePrivate();}else showTodo();}});

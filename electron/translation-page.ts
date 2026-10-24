@@ -8,11 +8,18 @@ function browserController(command:string,args:any):any {
   c.resetQueues=()=>{for(const item of c.nodes.values())if(item.status==='queued')item.status='new';for(const [id,status] of c.cueStates)if(status==='queued')c.cueStates.delete(id);};
   c.clearPage=()=>{document.querySelectorAll('[data-qixu-translation]').forEach(n=>n.remove());c.nodes.clear();};
   c.player=()=>document.querySelector('video.html5-main-video')||Array.from(document.querySelectorAll('video')).find(v=>v.getBoundingClientRect().width>0);
-  c.adPlaying=()=>location.hostname.endsWith('youtube.com')&&!!document.querySelector('.html5-video-player.ad-showing');
+  c.isYouTube=()=>/(^|\.)youtube\.com$/.test(location.hostname);
+  c.adPlaying=()=>c.isYouTube()&&!!document.querySelector('.html5-video-player.ad-showing,#movie_player.ad-showing');
+  // Only click an actual, visible and enabled skip control inside YouTube's player.
+  // The independent watchdog still checks while the local translation worker is busy.
   c.skipAd=()=>{
-   if(!c.autoSkipAds||!c.adPlaying()||Date.now()-(c.lastAdSkip||0)<1000)return;
-   const buttons=Array.from(document.querySelectorAll('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button')) as HTMLElement[];
-   const button=buttons.find(b=>{const r=b.getBoundingClientRect(),style=getComputedStyle(b);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.display!=='none'&&b.getAttribute('aria-disabled')!=='true'&&!b.hasAttribute('disabled');});
+   if(!c.active||!c.autoSkipAds||!c.isYouTube()||Date.now()-(c.lastAdSkip||0)<750)return;
+   const player=document.querySelector('#movie_player,.html5-video-player');
+   if(!player)return;
+   const selectors='.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button,.ytp-ad-skip-button-container button,.ytp-ad-skip-button-slot button,button[aria-label*="Skip Ad"],button[aria-label*="Skip ad"],button[aria-label*="跳过广告"],button[aria-label*="略過廣告"]';
+   const candidates=Array.from(player.querySelectorAll(selectors)) as HTMLElement[];
+   const button=candidates.map(b=>(b.matches('button,[role="button"]')?b:b.querySelector<HTMLElement>('button,[role="button"]')||b))
+     .find(b=>{const r=b.getBoundingClientRect(),style=getComputedStyle(b);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.display!=='none'&&Number(style.opacity)>0&&b.getAttribute('aria-disabled')!=='true'&&!b.hasAttribute('disabled');});
    if(button){c.lastAdSkip=Date.now();button.click();}
   };
   c.container=(video:HTMLVideoElement)=>{
@@ -45,22 +52,32 @@ function browserController(command:string,args:any):any {
   };c.render();
   c.refreshCaptions=async(video:HTMLVideoElement)=>{
    const yt=document.querySelector('#movie_player') as any;
-   const response=yt?.getPlayerResponse?.();
-   const videoId=response?.videoDetails?.videoId||new URL(location.href).searchParams.get('v')||video.currentSrc||'generic';
-   if(c.videoId!==videoId||c.video!==video){c.videoId=videoId;c.video=video;c.cues=[];c.cueStates.clear();c.translations.clear();c.liveText='';c.captionFetch=false;c.captionLoaded=false;c.captionReason='';c.nativeCaptionError='';c.lastCaptionToggle=0;c.captionToggleAttempts=0;c.transcriptAttempts=0;c.lastTranscriptAttempt=0;}
+   const pageVideoId=new URL(location.href).searchParams.get('v');
+   let response=yt?.getPlayerResponse?.();
+   if(!response?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length){
+    // getPlayerResponse is absent on some newer YouTube player builds.
+    const initial=(globalThis as any).ytInitialPlayerResponse;
+    if(initial&&(!pageVideoId||initial.videoDetails?.videoId===pageVideoId))response=initial;
+   }
+   if(!response?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length){
+    const raw=(globalThis as any).ytplayer?.config?.args?.player_response;
+    if(typeof raw==='string'&&raw.length<2000000){try{const candidate=JSON.parse(raw);if(!pageVideoId||candidate.videoDetails?.videoId===pageVideoId)response=candidate;}catch{}}
+   }
+   const videoId=pageVideoId||response?.videoDetails?.videoId||video.currentSrc||'generic';
+   if(c.videoId!==videoId||c.video!==video){c.videoId=videoId;c.video=video;c.cues=[];c.cueStates.clear();c.translations.clear();c.liveText='';c.captionFetch=false;c.captionLoaded=false;c.captionReason='';c.nativeCaptionError='';c.lastCaptionToggle=0;c.captionToggleAttempts=0;c.transcriptAttempts=0;c.lastTranscriptAttempt=0;c.lastCaptionAttempt=0;}
    if(location.hostname.endsWith('youtube.com')){
     const toggle=document.querySelector('.ytp-subtitles-button') as HTMLElement;
     if(toggle?.getAttribute('aria-pressed')==='false'&&toggle.getAttribute('aria-disabled')!=='true'&&video.readyState>=2&&Date.now()-c.lastCaptionToggle>2000&&c.captionToggleAttempts<4){c.lastCaptionToggle=Date.now();c.captionToggleAttempts++;toggle.click();}
     const tracks=response?.captions?.playerCaptionsTracklistRenderer?.captionTracks||[];
     const track=tracks.find((t:any)=>t.languageCode?.startsWith('en')&&t.kind!=='asr')||tracks.find((t:any)=>t.languageCode?.startsWith('en'))||tracks[0];
     c.captionLang=track?.languageCode||yt?.getOption?.('captions','track')?.languageCode||'';
-    if(track&&!c.captionFetch&&!c.captionLoaded&&video.readyState>=2){c.captionFetch=true;const captured=videoId;
+    if(track&&!c.captionFetch&&!c.captionLoaded&&video.readyState>=2&&Date.now()-(c.lastCaptionAttempt||0)>10000){c.captionFetch=true;c.lastCaptionAttempt=Date.now();const captured=videoId;
      void(async()=>{try{
       const url=new URL(track.baseUrl);if(!/(^|\.)youtube\.com$/.test(url.hostname)||url.protocol!=='https:')throw Error('字幕地址不受支持');url.searchParams.set('fmt','json3');
       const result=await fetch(url.href,{credentials:'include',signal:AbortSignal.timeout(12000)});const body=await result.text();if(body.length>4000000)throw Error('字幕轨道过大');const json=JSON.parse(body);
       const cues=(json.events||[]).filter((e:any)=>e.segs).map((e:any,i:number)=>({id:captured+':'+i,start:e.tStartMs/1000,end:(e.tStartMs+(e.dDurationMs||2000))/1000,text:e.segs.map((s:any)=>s.utf8||'').join('').replace(/\s+/g,' ').trim(),lang:track.languageCode})).filter((q:any)=>q.text);
       if(c.videoId===captured&&cues.length){c.cues=cues;c.captionLoaded=true;}
-     }catch(e:any){if(c.videoId===captured){c.captionFetchError=String(e?.message||e).slice(0,100);c.captionReason='字幕轨道未能读取，正在尝试播放器实时字幕';}}})();
+     }catch(e:any){if(c.videoId===captured){c.captionFetch=false;c.captionFetchError=String(e?.message||e).slice(0,100);c.captionReason='字幕轨道未能读取，正在尝试播放器实时字幕';}}})();
     }
     if(!c.captionLoaded){
      // Read the site's own transcript panel when timedtext is unavailable.
@@ -83,6 +100,8 @@ function browserController(command:string,args:any):any {
     else c.captionReason='此播放器未提供可读取的字幕轨道';
    }
   };
+  // Skipping and native-caption discovery cannot depend on the translation queue.
+  c.youtubeWatchdog=setInterval(()=>{if(!c.active||!c.isYouTube())return;c.skipAd();if(c.subtitles){const video=c.player();if(video&&video.readyState>=2)void c.refreshCaptions(video);}},300);
  }
  if(command==='configure'){
   const wasActive=c.active;
