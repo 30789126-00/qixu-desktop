@@ -73,6 +73,19 @@ function browserController(command:string,args:any):any {
     if(toggle?.getAttribute('aria-pressed')==='false'&&toggle.getAttribute('aria-disabled')!=='true'&&video.readyState>=2&&Date.now()-c.lastCaptionToggle>2000&&c.captionToggleAttempts<4){c.lastCaptionToggle=Date.now();c.captionToggleAttempts++;toggle.click();}
     const tracks=response?.captions?.playerCaptionsTracklistRenderer?.captionTracks||[];
     const track=tracks.find((t:any)=>t.languageCode?.startsWith('en')&&t.kind!=='asr')||tracks.find((t:any)=>t.languageCode?.startsWith('en'))||tracks[0];
+    const selected=yt?.getOption?.('captions','track');
+    if(c.subtitles&&selected?.languageCode?.startsWith('en')&&selected.translationLanguage?.languageCode&&typeof yt?.setOption==='function'&&Date.now()-(c.lastOriginalTrackAttempt||0)>6000){
+     const original=tracks.find((t:any)=>t.languageCode===selected.languageCode&&(t.kind||'')===(selected.kind||''))||track;
+     if(original){
+      c.lastOriginalTrackAttempt=Date.now();
+      try{
+       // YouTube's saved auto-translation can otherwise replace all English
+       // cues with Chinese before the local bilingual translator sees them.
+       yt.setOption('captions','track',{languageCode:original.languageCode,kind:original.kind||'',translationLanguage:null});
+       c.cues=[];c.cueStates.clear();c.translations.clear();c.captionLoaded=false;c.captionSource='';c.captionFetch=false;c.lastCaptionAttempt=0;
+      }catch{/* Keep ordinary captions available if this player lacks track control. */}
+     }
+    }
     c.captionLang=track?.languageCode||yt?.getOption?.('captions','track')?.languageCode||'';
     if(track&&!c.captionFetch&&!c.captionLoaded&&video.readyState>=2&&Date.now()-(c.lastCaptionAttempt||0)>10000){c.captionFetch=true;c.lastCaptionAttempt=Date.now();const captured=videoId;
      void(async()=>{try{
@@ -139,6 +152,7 @@ function browserController(command:string,args:any):any {
  if(command==='retry') {c.resetQueues();return true;}
  if(command==='importCaptions'){
   if(c.videoId&&args.videoId&&c.videoId!==args.videoId)return false;
+  if(/^en([-_]|$)/i.test(args.originalLanguage||'')&&!/^en([-_]|$)/i.test(args.language||''))return false;
   if(args.videoId)c.videoId=args.videoId;c.video=c.player();c.cues=args.cues;c.cueStates.clear();c.captionLang=args.language;c.captionLoaded=true;c.nativeCaptionError='';return true;
  }
  if(command==='captionError'){if(args.source==='transcript')c.nativeTranscriptError=args.message;else c.nativeCaptionError=args.message;return true;}

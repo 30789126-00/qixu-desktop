@@ -31,3 +31,11 @@ test('Transcript HTTP failures have a concrete UI reason and cannot update after
  response('first');await new Promise(r=>setTimeout(r,0));assert.equal(scripts.length,1);assert.ok(scripts[0].includes('HTTP 400'));assert.ok(scripts[0].includes('transcript'));
  current=false;response('late');await new Promise(r=>setTimeout(r,0));assert.equal(scripts.length,1);
 });
+test('Bilingual mode restores English original track and rejects its late Chinese auto-translation response',()=>{
+ let selected={languageCode:'en-US',kind:'',translationLanguage:{languageCode:'zh-Hans'}},calls=0;
+ const video={readyState:4,currentTime:1,textTracks:[],currentSrc:'video'},player={getPlayerResponse:()=>({captions:{playerCaptionsTracklistRenderer:{captionTracks:[{languageCode:'en-US',baseUrl:'https://www.youtube.com/api/timedtext?v=original&lang=en-US'}]}}}),getOption:()=>selected,setOption:(module,key,value)=>{assert.equal(module,'captions');assert.equal(key,'track');assert.equal(value.languageCode,'en-US');assert.equal(value.translationLanguage,null);selected={languageCode:'en-US',kind:''};calls++}};
+ const context=vm.createContext({URL,AbortSignal,HTMLVideoElement:class{},Element:class{},location:{hostname:'www.youtube.com',href:'https://www.youtube.com/watch?v=original'},requestAnimationFrame:()=>0,cancelAnimationFrame:()=>{},setInterval:()=>1,fetch:async()=>({text:async()=>''}),document:{documentElement:{lang:'en'},querySelector:s=>s==='video.html5-main-video'?video:s==='#movie_player'?player:null,querySelectorAll:()=>[]}});
+ const run=(cmd,args)=>vm.runInContext(translationPageScript(cmd,args),context);run('configure',{active:true,page:false,subtitles:true,autoSkipAds:false});run('collect',{pageBudget:0,captionBudget:6});assert.equal(calls,1);
+ const late=run('importCaptions',{videoId:'original',originalLanguage:'en-US',language:'zh-Hans',cues:[{id:'wrong',start:0,end:2,text:'中文字幕',lang:'zh-Hans'}]});assert.equal(late,false);assert.equal(context.__qixuTranslator.cues.length,0);
+ assert.equal(run('importCaptions',{videoId:'original',originalLanguage:'en-US',language:'en-US',cues:[{id:'right',start:0,end:2,text:'Hello world',lang:'en-US'}]}),true);assert.equal(context.__qixuTranslator.cues[0].id,'right');
+});

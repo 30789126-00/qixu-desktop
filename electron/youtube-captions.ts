@@ -18,14 +18,14 @@ export function parseCaptionResponse(body:string,videoId:string,language:string)
  }
  cues=cues.filter(c=>c.text&&Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start).sort((a,b)=>a.start-b.start);
  if(!cues.length)throw Error('字幕接口没有返回可用字幕');
- return cues.slice(0,30000).map((cue,i)=>({...cue,id:videoId+':native:'+i,lang:language}));
+ return cues.slice(0,30000).map((cue,i)=>({...cue,id:videoId+':native:'+language+':'+i,lang:language}));
 }
 // Read only subtitle responses already requested by the website's own player.
 // Request headers, cookies, account data and signed URLs are never exposed or logged.
 const attached=new WeakSet<WebContents>();
 export function attachYouTubeCaptions(wc:WebContents,isCurrent:()=>boolean){
  if(attached.has(wc))return;attached.add(wc);
- const pending=new Map<string,{videoId:string;language:string;status:number;transcript:boolean}>();
+ const pending=new Map<string,{videoId:string;language:string;originalLanguage:string;status:number;transcript:boolean}>();
  try{wc.debugger.attach('1.3');}catch{return;}
  void wc.debugger.sendCommand('Network.enable',{maxTotalBufferSize:8*1024*1024,maxResourceBufferSize:4*1024*1024}).catch(()=>{});
  const notify=async(message:string,source='caption')=>{if(!isCurrent()||wc.isDestroyed())return;await wc.executeJavaScript(translationPageScript('captionError',{message,source})).catch(()=>{});};
@@ -33,7 +33,7 @@ export function attachYouTubeCaptions(wc:WebContents,isCurrent:()=>boolean){
   if(method==='Network.responseReceived'){
    try{const url=new URL(params.response.url);if(url.protocol!=='https:'||!/(^|\.)youtube\.com$/.test(url.hostname))return;
     const transcript=url.pathname==='/youtubei/v1/get_transcript';if(url.pathname!=='/api/timedtext'&&!transcript)return;
-    if(pending.size>20)pending.clear();pending.set(params.requestId,{videoId:url.searchParams.get('v')||'',language:url.searchParams.get('tlang')||url.searchParams.get('lang')||'',status:params.response.status,transcript});
+    if(pending.size>20)pending.clear();pending.set(params.requestId,{videoId:url.searchParams.get('v')||'',language:url.searchParams.get('tlang')||url.searchParams.get('lang')||'',originalLanguage:url.searchParams.get('lang')||'',status:params.response.status,transcript});
    }catch{}return;
   }
   if(method==='Network.loadingFailed'){if(pending.delete(params.requestId))void notify('字幕请求失败，请稍后重试');return;}
@@ -45,7 +45,7 @@ export function attachYouTubeCaptions(wc:WebContents,isCurrent:()=>boolean){
    if(!isCurrent()||wc.isDestroyed())return;
    const body=response.base64Encoded?Buffer.from(response.body,'base64').toString('utf8'):response.body;
    const cues=parseCaptionResponse(body,track.videoId,track.language);
-   await wc.executeJavaScript(translationPageScript('importCaptions',{videoId:track.videoId,language:track.language,cues}));
+   await wc.executeJavaScript(translationPageScript('importCaptions',{videoId:track.videoId,language:track.language,originalLanguage:track.originalLanguage,cues}));
   }catch(e:any){void notify('YouTube '+String(e.message||'字幕读取失败').slice(0,100)+'；可关闭后重新开启双语字幕重试');}})();
  });
 }
