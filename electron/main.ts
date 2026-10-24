@@ -16,6 +16,7 @@ import { EventEmitter } from 'node:events';
 import { TranslationService } from './translation-service';
 import { BrowserTranslator } from './translation-browser';
 import { attachYouTubeCaptions } from './youtube-captions';
+import { YouTubeAdSkipper } from './youtube-ads';
 import { SITE_COOLDOWN_MS, sanitizeCooldowns, cooldownMessage } from './site-cooldown';
 import {isLoginPopup,isVideoLink} from './navigation';
 import { emptyResumeState, sanitizeResumeState, checkpoint, type SessionCheckpoint } from './recovery';
@@ -104,6 +105,7 @@ const isBlocked = () => state.access!=='private'||state.windowState !== 'visible
 const isTabBlocked=(tabId:string)=>isBlocked()||activeTabId!==tabId;
 const translator=new TranslationService(app.isPackaged?path.join(process.resourcesPath,'models'):path.join(__dirname,'../models'),(model,error)=>{state.translation.model=model;if(error)state.translation.error=error;emit();});
 const browserTranslator=new BrowserTranslator(translator,patch=>{Object.assign(state.translation,patch);emit();},()=>!isBlocked());
+const youtubeAdSkipper=new YouTubeAdSkipper();
 const popupTranslators=new Map<BrowserWindow,BrowserTranslator>();
 function cancelBrowserTranslation(){browserTranslator.cancel();for(const controller of popupTranslators.values())controller.cancel();}
 async function flushSessions(){await Promise.allSettled([...sessionsConfigured].map(async partition=>{const s=session.fromPartition(partition);s.flushStorageData();await s.cookies.flushStore();}));}
@@ -716,6 +718,8 @@ async function start() {
   screen.on('display-metrics-changed',()=>{if(state.windowState==='visible'){rememberedBounds=visibleBounds(win.getBounds());win.setBounds(rememberedBounds);}else rememberedBounds=visibleBounds(rememberedBounds);});
   const mouseTimer=setInterval(pollMouse,50);mouseTimer.unref();
   const translationTimer=setInterval(()=>{if(mediaView&&!isBlocked()){
+    const current=mediaView.webContents;
+    void youtubeAdSkipper.tick(current,()=>state.settings.autoSkipYouTubeAds&&!isBlocked()&&mediaView?.webContents===current);
     void browserTranslator.tick(mediaView.webContents,state.settings,true);
     for(const [popup,controller] of popupTranslators)if(!popup.isDestroyed()&&popup.isVisible())void controller.tick(popup.webContents,state.settings,true);
   }},450);translationTimer.unref();

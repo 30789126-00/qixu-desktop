@@ -36,8 +36,11 @@ function browserController(command:string,args:any):any {
   c.showCue=(video:HTMLVideoElement,cue:any)=>{
    const container=c.container(video);
    if(!c.overlay||c.overlay.parentElement!==container){c.overlay?.remove();const overlay=document.createElement('div');overlay.dataset.qixuUi='subtitles';overlay.style.cssText='position:absolute;left:5%;right:5%;bottom:9%;z-index:2147483647;pointer-events:none;text-align:center;';
-    const shadow=overlay.attachShadow({mode:'closed'});shadow.innerHTML='<style>:host{color:white;font-family:system-ui,"Microsoft YaHei",sans-serif}div{line-height:1.4;text-shadow:0 2px 5px #000,0 0 3px #000;font-size:clamp(15px,2.2vw,28px)}span{background:#111b;box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:2px 7px;border-radius:5px}#en{font-size:.78em;margin-top:4px}</style><div id="zh"><span></span></div><div id="en"><span></span></div>';
-    c.zh=shadow.querySelector('#zh span');c.en=shadow.querySelector('#en span');c.overlay=overlay;container.appendChild(overlay);
+    const shadow=overlay.attachShadow({mode:'closed'}),style=document.createElement('style');
+    style.textContent=':host{color:white;font-family:system-ui,"Microsoft YaHei",sans-serif}div{line-height:1.4;text-shadow:0 2px 5px #000,0 0 3px #000;font-size:clamp(15px,2.2vw,28px)}span{background:#111b;box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:2px 7px;border-radius:5px}#en{font-size:.78em;margin-top:4px}';
+    shadow.appendChild(style);
+    for(const language of ['zh','en']){const line=document.createElement('div'),text=document.createElement('span');line.id=language;line.appendChild(text);shadow.appendChild(line);c[language]=text;}
+    c.overlay=overlay;container.appendChild(overlay);
    }
    const translated=c.translations.get(cue.id),zh=translated?.zh||'中文翻译中…',en=translated?.en||(cue.lang?.startsWith('en')?cue.text:'English translation…');if(c.zh.textContent!==zh)c.zh.textContent=zh;if(c.en.textContent!==en)c.en.textContent=en;c.overlay.hidden=false;
    const native=document.querySelector('.ytp-caption-window-container') as HTMLElement;
@@ -64,7 +67,7 @@ function browserController(command:string,args:any):any {
     if(typeof raw==='string'&&raw.length<2000000){try{const candidate=JSON.parse(raw);if(!pageVideoId||candidate.videoDetails?.videoId===pageVideoId)response=candidate;}catch{}}
    }
    const videoId=pageVideoId||response?.videoDetails?.videoId||video.currentSrc||'generic';
-   if(c.videoId!==videoId||c.video!==video){c.videoId=videoId;c.video=video;c.cues=[];c.cueStates.clear();c.translations.clear();c.liveText='';c.captionFetch=false;c.captionLoaded=false;c.captionReason='';c.nativeCaptionError='';c.lastCaptionToggle=0;c.captionToggleAttempts=0;c.transcriptAttempts=0;c.lastTranscriptAttempt=0;c.lastCaptionAttempt=0;}
+   if(c.videoId!==videoId||c.video!==video){c.videoId=videoId;c.video=video;c.cues=[];c.cueStates.clear();c.translations.clear();c.liveText='';c.captionFetch=false;c.captionLoaded=false;c.captionSource='';c.captionReason='';c.nativeCaptionError='';c.nativeTranscriptError='';c.lastCaptionToggle=0;c.captionToggleAttempts=0;c.transcriptAttempts=0;c.lastTranscriptAttempt=0;c.lastCaptionAttempt=0;}
    if(location.hostname.endsWith('youtube.com')){
     const toggle=document.querySelector('.ytp-subtitles-button') as HTMLElement;
     if(toggle?.getAttribute('aria-pressed')==='false'&&toggle.getAttribute('aria-disabled')!=='true'&&video.readyState>=2&&Date.now()-c.lastCaptionToggle>2000&&c.captionToggleAttempts<4){c.lastCaptionToggle=Date.now();c.captionToggleAttempts++;toggle.click();}
@@ -79,16 +82,30 @@ function browserController(command:string,args:any):any {
       if(c.videoId===captured&&cues.length){c.cues=cues;c.captionLoaded=true;}
      }catch(e:any){if(c.videoId===captured){c.captionFetch=false;c.captionFetchError=String(e?.message||e).slice(0,100);c.captionReason='字幕轨道未能读取，正在尝试播放器实时字幕';}}})();
     }
-    if(!c.captionLoaded){
+    if(!c.captionLoaded||c.captionSource==='transcript'){
      // Read the site's own transcript panel when timedtext is unavailable.
      // This uses the ordinary page controls, without private APIs or account access.
-     const segments=Array.from(document.querySelectorAll('ytd-transcript-segment-renderer'));
-     const transcript=segments.map((el,i)=>{const stamp=el.querySelector('.segment-timestamp')?.textContent?.trim()||'';const text=el.querySelector('.segment-text')?.textContent?.replace(/\s+/g,' ').trim()||'';return {id:videoId+':transcript:'+i,start:/^\d+(?::\d+){1,2}$/.test(stamp)?stamp.split(':').reduce((n,p)=>n*60+Number(p),0):NaN,end:0,text,lang:c.captionLang};}).filter(q=>q.text&&Number.isFinite(q.start));
-     if(transcript.length){transcript.forEach((q,i)=>q.end=transcript[i+1]?.start??q.start+5);c.cues=transcript.filter(q=>q.end>q.start);c.captionLoaded=true;c.captionReason='';}
+     const segments=Array.from(document.querySelectorAll('ytd-transcript-segment-renderer,transcript-segment-view-model'));
+     const transcript=segments.map(el=>{const stamp=el.querySelector('.segment-timestamp,.ytwTranscriptSegmentViewModelTimestamp')?.textContent?.trim()||'';const text=el.querySelector('.segment-text,span[role="text"]')?.textContent?.replace(/\s+/g,' ').trim()||'';const start=/^\d+(?::\d+){1,2}$/.test(stamp)?stamp.split(':').reduce((n,p)=>n*60+Number(p),0):NaN;return {id:videoId+':transcript:'+start+':'+text,start,end:0,text,lang:c.captionLang};}).filter(q=>q.text&&Number.isFinite(q.start));
+     if(transcript.length){
+      // New YouTube transcript components can render only part of the list.
+      // Keep stable IDs and merge by timestamp so scrolling does not replace cues.
+      const merged=new Map<number,any>((c.captionSource==='transcript'?c.cues:[]).map((q:any)=>[q.start,q]));
+      for(const q of transcript)merged.set(q.start,q);
+      const cues=Array.from(merged.values()).sort((a,b)=>a.start-b.start).slice(0,30000);
+      cues.forEach((q,i)=>q.end=cues[i+1]?.start??q.start+5);
+      c.cues=cues.filter(q=>q.end>q.start);c.captionLoaded=true;c.captionSource='transcript';c.captionReason='';c.nativeCaptionError='';c.nativeTranscriptError='';
+     }
      else if(tracks.length&&video.readyState>=2&&Date.now()-(c.lastTranscriptAttempt||0)>5000&&(c.transcriptAttempts||0)<3){
-      c.lastTranscriptAttempt=Date.now();c.transcriptAttempts=(c.transcriptAttempts||0)+1;
-      const button=Array.from(document.querySelectorAll('ytd-video-description-transcript-section-renderer button,button[aria-label],ytd-button-renderer button')).find(el=>/show transcript|显示转录|顯示轉錄|文字记录|文字記錄/i.test((el.getAttribute('aria-label')||'')+' '+el.textContent)) as HTMLElement;
-      if(button)button.click();else (document.querySelector('ytd-watch-metadata #expand') as HTMLElement)?.click();
+      c.lastTranscriptAttempt=Date.now();
+      const button=Array.from(document.querySelectorAll('button')).find(el=>{const r=el.getBoundingClientRect(),label=(el.getAttribute('aria-label')||'')+' '+el.textContent;return r.width>0&&r.height>0&&!/关闭|關閉|close|hide/i.test(label)&&/show transcript|显示转录|顯示轉錄|文字记录|文字記錄|内容转文字|內容轉文字|转写文稿|轉寫文稿/i.test(label);}) as HTMLElement;
+      // Loading an ad can delay the description UI. A missing control must not
+      // consume all attempts before the normal video has even started.
+      if(button){c.transcriptAttempts=(c.transcriptAttempts||0)+1;button.click();}
+      else {
+       const expand=Array.from(document.querySelectorAll<HTMLElement>('#description-inline-expander #expand,ytd-watch-metadata #description #expand')).find(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&!el.hidden;});
+       expand?.click();
+      }
      }
      const text=Array.from(document.querySelectorAll('.ytp-caption-segment')).map(n=>n.textContent||'').join(' ').trim();
      if(!c.captionLoaded&&text&&text!==c.liveText){c.liveText=text;const at=video.currentTime;const previous=c.cues[c.cues.length-1];if(previous&&at>=previous.start)previous.end=Math.min(previous.end,at);c.cues.push({id:videoId+':live:'+ ++c.serial,start:at,end:at+5,text,lang:c.captionLang});if(c.cues.length>250)c.cues.shift();}
@@ -101,12 +118,12 @@ function browserController(command:string,args:any):any {
    }
   };
   // Skipping and native-caption discovery cannot depend on the translation queue.
-  c.youtubeWatchdog=setInterval(()=>{if(!c.active||!c.isYouTube())return;c.skipAd();if(c.subtitles){const video=c.player();if(video&&video.readyState>=2)void c.refreshCaptions(video);}},300);
+  c.youtubeWatchdog=setInterval(()=>{if(!c.active||!c.isYouTube())return;c.skipAd();if(c.subtitles){const video=c.player();if(video&&video.readyState>=2&&!c.adPlaying())void c.refreshCaptions(video);}},300);
  }
  if(command==='configure'){
   const wasActive=c.active;
   if(c.page&&!args.page)c.clearPage();if(c.active&&!args.active)c.resetQueues();
-  if(!c.subtitles&&args.subtitles&&!c.cues.length){c.captionFetch=false;c.nativeCaptionError='';c.lastCaptionToggle=0;c.captionToggleAttempts=0;}
+  if(!c.subtitles&&args.subtitles&&!c.cues.length){c.captionFetch=false;c.nativeCaptionError='';c.nativeTranscriptError='';c.lastCaptionToggle=0;c.captionToggleAttempts=0;c.transcriptAttempts=0;c.lastTranscriptAttempt=0;}
   c.page=args.page;c.subtitles=args.subtitles;c.active=args.active;if(typeof args.autoSkipAds==='boolean')c.autoSkipAds=args.autoSkipAds;
   if(c.active)c.skipAd();
   if(!c.active||!c.subtitles){c.overlay?.remove();c.overlay=null;c.restoreNative();}
@@ -124,7 +141,7 @@ function browserController(command:string,args:any):any {
   if(c.videoId&&args.videoId&&c.videoId!==args.videoId)return false;
   if(args.videoId)c.videoId=args.videoId;c.video=c.player();c.cues=args.cues;c.cueStates.clear();c.captionLang=args.language;c.captionLoaded=true;c.nativeCaptionError='';return true;
  }
- if(command==='captionError'){c.nativeCaptionError=args.message;return true;}
+ if(command==='captionError'){if(args.source==='transcript')c.nativeTranscriptError=args.message;else c.nativeCaptionError=args.message;return true;}
  if(command==='skip'){if(args.kind==='page'){const item=c.nodes.get(args.id);if(item)item.status='done';}else{const cue=c.cues.find((q:any)=>q.id===args.id);if(cue)cue.skip=true;c.cueStates.set(args.id,'done');}return true;}
  if(command!=='collect'||!c.active)return {pages:[],captions:[],reason:''};
  c.skipAd();
@@ -145,6 +162,6 @@ function browserController(command:string,args:any):any {
  const video=c.player();let captions:any[]=[];
  if(c.subtitles&&video&&!c.adPlaying()){c.refreshCaptions(video);captions=c.cues.filter((q:any)=>q.end>=video.currentTime&&q.start<=video.currentTime+30&&!c.cueStates.has(q.id)).slice(0,args.captionBudget??6);for(const cue of captions)c.cueStates.set(cue.id,'queued');}
  if(c.adPlaying())return {pages,captions:[],reason:'广告播放中，正片开始后显示双语字幕',pageLanguage:document.documentElement.lang};
- return {pages,captions,reason:c.subtitles?(video?(c.cues.length?(c.translations.size?'双语字幕已开启':'字幕已读取，正在本地翻译…'):c.nativeCaptionError||c.captionReason||'正在读取视频字幕'):'等待选择视频'):'双语字幕已关闭',pageLanguage:document.documentElement.lang};
+ return {pages,captions,reason:c.subtitles?(video?(c.cues.length?(c.translations.size?'双语字幕已开启':'字幕已读取，正在本地翻译…'):c.nativeTranscriptError||c.nativeCaptionError||c.captionReason||'正在读取视频字幕'):'等待选择视频'):'双语字幕已关闭',pageLanguage:document.documentElement.lang};
 }
 export function translationPageScript(command:string,args:any={}) {return `(${browserController.toString()})(${JSON.stringify(command)},${JSON.stringify(args)})`;}

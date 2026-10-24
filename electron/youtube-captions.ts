@@ -25,19 +25,21 @@ export function parseCaptionResponse(body:string,videoId:string,language:string)
 const attached=new WeakSet<WebContents>();
 export function attachYouTubeCaptions(wc:WebContents,isCurrent:()=>boolean){
  if(attached.has(wc))return;attached.add(wc);
- const pending=new Map<string,{videoId:string;language:string;status:number}>();
+ const pending=new Map<string,{videoId:string;language:string;status:number;transcript:boolean}>();
  try{wc.debugger.attach('1.3');}catch{return;}
  void wc.debugger.sendCommand('Network.enable',{maxTotalBufferSize:8*1024*1024,maxResourceBufferSize:4*1024*1024}).catch(()=>{});
- const notify=async(message:string)=>{if(!isCurrent()||wc.isDestroyed())return;await wc.executeJavaScript(translationPageScript('captionError',{message})).catch(()=>{});};
+ const notify=async(message:string,source='caption')=>{if(!isCurrent()||wc.isDestroyed())return;await wc.executeJavaScript(translationPageScript('captionError',{message,source})).catch(()=>{});};
  wc.debugger.on('message',(_event,method,params)=>{
   if(method==='Network.responseReceived'){
-   try{const url=new URL(params.response.url);if(url.protocol!=='https:'||!/(^|\.)youtube\.com$/.test(url.hostname)||url.pathname!=='/api/timedtext')return;
-    if(pending.size>20)pending.clear();pending.set(params.requestId,{videoId:url.searchParams.get('v')||'',language:url.searchParams.get('tlang')||url.searchParams.get('lang')||'',status:params.response.status});
+   try{const url=new URL(params.response.url);if(url.protocol!=='https:'||!/(^|\.)youtube\.com$/.test(url.hostname))return;
+    const transcript=url.pathname==='/youtubei/v1/get_transcript';if(url.pathname!=='/api/timedtext'&&!transcript)return;
+    if(pending.size>20)pending.clear();pending.set(params.requestId,{videoId:url.searchParams.get('v')||'',language:url.searchParams.get('tlang')||url.searchParams.get('lang')||'',status:params.response.status,transcript});
    }catch{}return;
   }
   if(method==='Network.loadingFailed'){if(pending.delete(params.requestId))void notify('字幕请求失败，请稍后重试');return;}
   if(method!=='Network.loadingFinished')return;const track=pending.get(params.requestId);if(!track)return;pending.delete(params.requestId);
-  if(track.status<200||track.status>=300){void notify('YouTube 字幕接口返回 HTTP '+track.status+'，请稍后重试');return;}
+  if(track.status<200||track.status>=300){void notify('YouTube '+(track.transcript?'转写文稿':'字幕')+'接口返回 HTTP '+track.status+'；请在原站重试或确认登录状态',track.transcript?'transcript':'caption');return;}
+  if(track.transcript)return;
   void(async()=>{try{
    const response=await wc.debugger.sendCommand('Network.getResponseBody',{requestId:params.requestId});
    if(!isCurrent()||wc.isDestroyed())return;
