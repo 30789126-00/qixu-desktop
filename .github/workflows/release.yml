@@ -1,6 +1,7 @@
 name: Publish Windows release
 on:
   push:
+    branches: [main]
     paths: ['.github/workflows/release.yml', 'package.json']
   workflow_dispatch:
 permissions:
