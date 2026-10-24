@@ -365,7 +365,7 @@ function scheduleAutoRestoreVerification(){
   if(pendingAutoRestore)return;
   pendingAutoRestore=setTimeout(()=>{
     pendingAutoRestore=undefined;
-    if(!win||win.isDestroyed()||state.access!=='private'||!state.settings.autoHide||state.loginMode||state.windowState!=='autoHidden')return;
+    if(!win||win.isDestroyed()||state.access!=='private'||(!state.settings.autoHide&&!blurAutoHidden)||state.loginMode||state.windowState!=='autoHidden')return;
     if(pointerInsideRecovery(screen.getCursorScreenPoint()))restore(true);
   },AUTO_RESTORE_VERIFY_MS);
 }
