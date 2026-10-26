@@ -18,6 +18,7 @@ using Forms = System.Windows.Forms;
 
 public class TaskItem {
  public string Id = Guid.NewGuid().ToString(); public string Title;
+ public string Project="",Tags="",RepeatKind="none",RepeatNextId=""; public int RepeatEvery=1,RepeatAnchorDay,RepeatStartDay;
  public DateTime? Start, End;
  public int Quadrant = 1; public bool Done, Notified, EndNotified; public DateTime Created = DateTime.Now;
  public TaskItem Copy() { return (TaskItem)MemberwiseClone(); }
@@ -25,6 +26,7 @@ public class TaskItem {
 public class State {
  public List<TaskItem> Tasks = new List<TaskItem>(); public string Note = "";
  public string OffWorkTime = "18:00"; public DateTime WorkdayDate; public string WorkBootSession="";
+ public string[] WeeklyOffWork=new string[7]; public DateTime WorkOverrideDate; public string WorkOverrideTime="";
  public bool StickyOpen = true; public double WidgetOpacity = 0.72; public bool Pin = true;
  public double NoteLeft = 100, NoteTop = 100, NoteWidth = 390, NoteHeight = 740;
 }
@@ -34,13 +36,15 @@ public static class Data {
  public static string[] Split(string s) { return s.Split(new char[] { ',', '，', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).Where(x => x.Length > 0).ToArray(); }
  public static bool ValidRange(DateTime? start, DateTime? end) { return !start.HasValue || !end.HasValue || end.Value >= start.Value; }
  public static State Read() {
+  if(File.Exists(FileName+".tmp")&&(!File.Exists(FileName)||File.GetLastWriteTimeUtc(FileName+".tmp")>File.GetLastWriteTimeUtc(FileName))){try{using(var pending=File.OpenRead(FileName+".tmp"))return Normalize((State)new XmlSerializer(typeof(State)).Deserialize(pending));}catch{}}
   if (!File.Exists(FileName)) return new State();
   try { using (var f = File.OpenRead(FileName)) return Normalize((State)new XmlSerializer(typeof(State)).Deserialize(f)); }
   catch { if (File.Exists(FileName + ".bak")) { using (var f = File.OpenRead(FileName + ".bak")) { var s = Normalize((State)new XmlSerializer(typeof(State)).Deserialize(f)); MessageBox.Show("已从上一次备份恢复数据。", "待办"); return s; } } throw; }
  }
  static State Normalize(State s) {
+  if(s.WeeklyOffWork==null||s.WeeklyOffWork.Length!=7)s.WeeklyOffWork=new string[7];
   if (s.Tasks == null) s.Tasks = new List<TaskItem>(); var ids = new HashSet<string>();
-  foreach (var t in s.Tasks) { if (String.IsNullOrEmpty(t.Id) || !ids.Add(t.Id)) { t.Id = Guid.NewGuid().ToString(); ids.Add(t.Id); } t.Quadrant = Math.Max(0, Math.Min(3, t.Quadrant)); t.Title = t.Title ?? "未命名任务"; }
+  foreach (var t in s.Tasks) { if (String.IsNullOrEmpty(t.Id) || !ids.Add(t.Id)) { t.Id = Guid.NewGuid().ToString(); ids.Add(t.Id); } t.Quadrant = Math.Max(0, Math.Min(3, t.Quadrant)); t.Title = t.Title ?? "未命名任务";t.Project=t.Project??"";t.Tags=t.Tags??"";if(t.RepeatKind!="week"&&t.RepeatKind!="month")t.RepeatKind="none";t.RepeatEvery=Math.Max(1,Math.Min(52,t.RepeatEvery)); }
   return s;
  }
  public static void Save(State s) {
@@ -49,7 +53,7 @@ public static class Data {
   if (File.Exists(FileName)) File.Replace(temp, FileName, FileName + ".bak"); else File.Move(temp, FileName);
  }
 }
-public static class WorkdayClock {
+public static partial class WorkdayClock {
  [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern ulong GetTickCount64();
  public static string BootSession(){
   // Kernel-Boot 27 identifies both cold and fast-startup boots. Hibernate resume
@@ -256,7 +260,7 @@ class MarqueeSurface : Grid {
   if (wasDragging && !movingTask) { writeSelection(new HashSet<string>(baseline)); finish(); }
  }
 }
-public class MainWindow : Window {
+public partial class MainWindow : Window {
  public State state;
  Composer composer, widgetComposer; TextBox search, note; TextBlock savedNote; bool noteDraftPending; StackPanel items, stickyTasks; Grid board;
  TextBlock heading, summary, status, widgetStatus; WrapPanel mainActions, widgetActions; Window sticky;
@@ -275,7 +279,7 @@ public class MainWindow : Window {
   state = Data.Read(); TimeSpan validTime;if(!WorkdayClock.TryTime(state.OffWorkTime,out validTime))state.OffWorkTime="18:00";if(WorkdayClock.StartSession(state,DateTime.Now,WorkdayClock.BootSession()))Save();
   var root = new Grid(); root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) }); root.ColumnDefinitions.Add(new ColumnDefinition()); Content = root;
   var side = new DockPanel { Background = Ui.B("#E7D9FA") }; root.Children.Add(side);
-  var bottom = new StackPanel { Margin = new Thickness(20) }; DockPanel.SetDock(bottom, Dock.Bottom); bottom.Children.Add(Ui.T("本地保存 · 随时继续", 12, "#8791A6")); bottom.Children.Add(Ui.T("Ctrl+Z 撤销 · Esc 退出多选", 10, "#8791A6")); side.Children.Add(bottom);
+  var bottom = new StackPanel { Margin = new Thickness(20) }; DockPanel.SetDock(bottom, Dock.Bottom); bottom.Children.Add(MakeSaveStatus()); bottom.Children.Add(Ui.T("Ctrl+Z 撤销 · Esc 退出多选", 10, "#8791A6")); side.Children.Add(bottom);
   var nav = new StackPanel { Margin = new Thickness(18, 30, 12, 0) }; side.Children.Add(nav); nav.Children.Add(Ui.T("◉  待办", 28, "#7141BD")); var tag = Ui.T("把今天过成喜欢的颜色。", 12, "#8590A8"); tag.Margin = new Thickness(0, 8, 0, 32); nav.Children.Add(tag);
   foreach (var name in new[] { "列表", "四象限", "已完成" }) { string target = name; var b = Ui.Button((name == "列表" ? "☰   " : name == "四象限" ? "▦   " : "✓   ") + name, () => { ClearSelection(); view = target; Refresh(); }); b.Margin = new Thickness(0, 0, 0, 12); nav.Children.Add(b); navButtons[target]=b; }
   var widgetButton = Ui.Button("▤   桌面组件", ShowSticky); widgetButton.Margin = new Thickness(0, 24, 0, 12); nav.Children.Add(widgetButton); nav.Children.Add(Ui.Button("打开数据文件夹", () => { Directory.CreateDirectory(Data.Folder); System.Diagnostics.Process.Start(Data.Folder); }));
@@ -294,6 +298,7 @@ public class MainWindow : Window {
   composer = MakeComposer(false); top.Children.Add(new Border { Background = Ui.B("#DDF4DF"), CornerRadius = new CornerRadius(20), Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 13), Child = composer });
   var filter = new DockPanel { Margin = new Thickness(0, 0, 0, 8) }; search = new TextBox { Width = 190, Padding = new Thickness(7), BorderBrush = Ui.B("#E0E5EF"), ToolTip = "搜索任务（Ctrl+F）" }; Ui.Name(search, "搜索任务"); DockPanel.SetDock(search, Dock.Right); filter.Children.Add(search);
   var selectButton = Ui.Button("多选", () => { selecting = true; UpdateSelection(); }, false, true); DockPanel.SetDock(selectButton, Dock.Right); filter.Children.Add(selectButton); filter.Children.Add(Ui.T("任务清单 · 左键拖动框选", 13)); top.Children.Add(filter); search.TextChanged += (o, e) => { ClearSelection(); Refresh(); };
+  top.Children.Add(MakeProjectFilters());
   mainActions = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) }; top.Children.Add(mainActions);
   var content = new Grid(); mainSurface = MakeSurface(content, false); main.Children.Add(mainSurface); items = new StackPanel(); content.Children.Add(new ScrollViewer { Content = items, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }); board = new Grid(); for (int i = 0; i < 2; i++) { board.RowDefinitions.Add(new RowDefinition()); board.ColumnDefinitions.Add(new ColumnDefinition()); } content.Children.Add(board);
   mainSurface.TaskDragEnabled = () => view == "四象限"; mainSurface.DropTarget = QuadrantAt; mainSurface.DropBounds = QuadrantBounds; mainSurface.DropTasks = MoveTasks;
@@ -304,22 +309,23 @@ public class MainWindow : Window {
  }
  Border MakeWorkClock(bool compact) {
   var panel=new StackPanel();var label=Ui.T("下班 / 加班计时",compact?11:12,"#705324");panel.Children.Add(label);
-  var value=Ui.T(WorkdayClock.Remaining(DateTime.Now,state.OffWorkTime,state.WorkdayDate),compact?19:22,"#624119");value.FontWeight=FontWeights.SemiBold;value.Margin=new Thickness(0,4,0,6);Ui.Name(value,compact?"组件下班倒计时":"下班倒计时");panel.Children.Add(value);
-  var row=new DockPanel();var input=new TextBox{Text=state.OffWorkTime,Width=60,Padding=new Thickness(5),FontSize=12,Background=Ui.B("#FFF9DF"),BorderBrush=Ui.B("#D2B56A"),ToolTip="每天的下班时间，例如 18:30（24小时制）"};Ui.Name(input,compact?"组件下班时间":"下班时间");
+  var value=Ui.T(WorkdayClock.Remaining(DateTime.Now,WorkdayClock.Resolve(state),state.WorkdayDate),compact?19:22,"#624119");value.FontWeight=FontWeights.SemiBold;value.Margin=new Thickness(0,4,0,6);Ui.Name(value,compact?"组件下班倒计时":"下班倒计时");panel.Children.Add(value);
+  var row=new DockPanel();var input=new TextBox{Text=WorkdayClock.Resolve(state),Width=60,Padding=new Thickness(5),FontSize=12,Background=Ui.B("#FFF9DF"),BorderBrush=Ui.B("#D2B56A"),ToolTip="每天的下班时间，例如 18:30（24小时制）"};Ui.Name(input,compact?"组件下班时间":"下班时间");
   Action apply=()=>CommitWorkClock(input,true);
   var save=Ui.Button("设置",apply,false,true);save.Background=Ui.B("#F3C74E");save.Foreground=Ui.B("#60431B");save.Margin=new Thickness(6,0,0,0);DockPanel.SetDock(save,Dock.Right);row.Children.Add(save);row.Children.Add(input);panel.Children.Add(row);input.KeyDown+=(o,e)=>{if(e.Key==Key.Enter){apply();e.Handled=true;}};
   input.TextChanged+=(o,e)=>{if(syncingWorkClock)return;pendingOffWork=input;if(workClockDebounce==null){workClockDebounce=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(450)};workClockDebounce.Tick+=(a,b)=>FlushWorkClock();}workClockDebounce.Stop();workClockDebounce.Start();};input.LostKeyboardFocus+=(o,e)=>{if(pendingOffWork==input)FlushWorkClock();};
+  panel.Children.Add(Ui.Button("每周时间 / 临时调整",ShowWeeklySchedule,false,true));
   if(compact){widgetClock=value;widgetOffWork=input;}else{mainClock=value;mainOffWork=input;}
   return new Border{Background=Ui.B("#FFE79B"),CornerRadius=new CornerRadius(16),Padding=new Thickness(compact?10:12),Margin=new Thickness(0,compact?0:16,0,10),Child=panel};
  }
  bool CommitWorkClock(TextBox input,bool report){
   TimeSpan time;if(input==null||!WorkdayClock.TryTime(input.Text,out time)){if(input!=null)input.BorderBrush=Ui.B("#BE3152");if(report)Report("下班时间请输入 00:00～23:59，例如 18:30");return false;}
-  string before=state.OffWorkTime;state.OffWorkTime=time.ToString(@"hh\:mm");if(state.OffWorkTime!=before&&!Save()){state.OffWorkTime=before;return false;}
-  syncingWorkClock=true;try{foreach(var field in new[]{mainOffWork,widgetOffWork})if(field!=null){field.Text=state.OffWorkTime;field.BorderBrush=Ui.B("#D2B56A");}}finally{syncingWorkClock=false;}
+  string before=state.OffWorkTime;if(state.WeeklyOffWork.Any(s=>!String.IsNullOrWhiteSpace(s))){state.WorkOverrideDate=state.WorkdayDate;state.WorkOverrideTime=time.ToString(@"hh\:mm");}else state.OffWorkTime=time.ToString(@"hh\:mm");if((state.OffWorkTime!=before||state.WeeklyOffWork.Any(s=>!String.IsNullOrWhiteSpace(s)))&&!Save()){state.OffWorkTime=before;return false;}
+  syncingWorkClock=true;try{foreach(var field in new[]{mainOffWork,widgetOffWork})if(field!=null){field.Text=WorkdayClock.Resolve(state);field.BorderBrush=Ui.B("#D2B56A");}}finally{syncingWorkClock=false;}
   pendingOffWork=null;if(workClockDebounce!=null)workClockDebounce.Stop();RefreshWorkClock();if(report)Report("下班时间已保存 · 主界面与组件同步");return true;
  }
  void FlushWorkClock(){if(workClockDebounce!=null)workClockDebounce.Stop();if(pendingOffWork!=null)CommitWorkClock(pendingOffWork,false);}
- void RefreshWorkClock(){string text=WorkdayClock.Remaining(DateTime.Now,state.OffWorkTime,state.WorkdayDate);if(mainClock!=null)mainClock.Text=text;if(widgetClock!=null)widgetClock.Text=text;}
+ void RefreshWorkClock(){string text=WorkdayClock.Remaining(DateTime.Now,WorkdayClock.Resolve(state),state.WorkdayDate);if(mainClock!=null)mainClock.Text=text;if(widgetClock!=null)widgetClock.Text=text;}
  public void EnableExitSignal() { exitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\DaibanDesktopExit"); exitWait = ThreadPool.RegisterWaitForSingleObject(exitSignal, (o, timed) => Dispatcher.BeginInvoke(new Action(Exit)), null, Timeout.Infinite, true); }
  void RefreshStartup() {
   try { bool enabled = StartupSettings.Read(); startupSwitch.IsChecked = enabled; startupStatus.Text = enabled ? "已开启 · 登录后启动组件" : "已关闭 · 点击开关开启"; }
@@ -332,7 +338,7 @@ public class MainWindow : Window {
  void Exit() { exiting = true; Close(); }
  void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
  void Report(string text) { status.Text = text; if (widgetStatus != null) widgetStatus.Text = text; }
- bool Save() { try { Data.Save(state); return true; } catch (Exception e) { MessageBox.Show("保存失败，请检查磁盘空间或权限。\n" + e.Message, "待办"); return false; } }
+ bool Save() { return SaveManaged(); }
  Composer MakeComposer(bool compact) { var c = new Composer(compact); c.Report = Report; c.AddTasks = (titles, start, end, q) => Commit(() => { foreach (string title in titles) state.Tasks.Add(new TaskItem { Title = title, Start = start, End = end, Quadrant = q }); }, "已添加 " + titles.Length + " 个待办"); return c; }
  bool Commit(Action action, string message) {
   var before = state.Tasks.Select(x => x.Copy()).ToList(); action(); if (!Save()) { state.Tasks = before; Refresh(); return false; }
@@ -342,8 +348,9 @@ public class MainWindow : Window {
   if (undo.Count == 0) { Report("没有可撤销的操作"); return; } var current = state.Tasks; state.Tasks = undo.Pop(); if (!Save()) { undo.Push(state.Tasks); state.Tasks = current; return; }
   selected.Clear(); selecting = false; Refresh(); Report("已撤销最近一次操作");
  }
- IEnumerable<TaskItem> Filter() { return state.Tasks.Where(x => x.Done == (view == "已完成") && (String.IsNullOrWhiteSpace(search.Text) || x.Title.IndexOf(search.Text, StringComparison.CurrentCultureIgnoreCase) >= 0)).OrderBy(x => x.End ?? DateTime.MaxValue).ThenBy(x => x.Start ?? DateTime.MaxValue).ThenBy(x => x.Created); }
+ IEnumerable<TaskItem> Filter() { return state.Tasks.Where(x => x.Done == (view == "已完成") && (String.IsNullOrWhiteSpace(search.Text) || TaskRules.SearchText(x).IndexOf(search.Text, StringComparison.CurrentCultureIgnoreCase) >= 0) && MatchTaxonomy(x)).OrderBy(x => x.End ?? DateTime.MaxValue).ThenBy(x => x.Start ?? DateTime.MaxValue).ThenBy(x => x.Created); }
  void Refresh() {
+  RefreshProjectFilters();
   if (mainSurface != null) mainSurface.Cancel(); if (widgetSurface != null) widgetSurface.Cancel();
   foreach(var pair in navButtons){pair.Value.Background=Ui.B(pair.Key==view?"#7350D6":"#E8DFFB");pair.Value.Foreground=Ui.B(pair.Key==view?"#FFFFFF":"#554070");}
   if (items == null) return; heading.Text = view == "列表" ? "我的待办" : view; summary.Text = state.Tasks.Count(x => !x.Done) + " 件待办   ·   " + state.Tasks.Count(x => x.Done) + " 件已完成   ·   开始有安排，截止有提醒";
@@ -368,10 +375,10 @@ public class MainWindow : Window {
  static string TimeLine(TaskItem task) { return (task.Start.HasValue ? "开始 " + task.Start.Value.ToString("MM/dd HH:mm") : "开始未设置") + "   ·   " + (task.End.HasValue ? "截止 " + task.End.Value.ToString("MM/dd HH:mm") : "截止未设置"); }
  Border Card(TaskItem task, bool compact, bool widget) {
   var row = new DockPanel(); var check = new CheckBox { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0), ToolTip = "完成任务；多选模式下选择任务" }; Ui.Name(check, (selecting ? "选择 " : "完成 ") + task.Title);
-  check.Click += (o, e) => { if (selecting) Toggle(task.Id); else { bool done = !task.Done; Commit(() => { task.Done = done; }, done ? "已完成任务" : "已恢复任务"); } e.Handled = true; }; DockPanel.SetDock(check, Dock.Left); row.Children.Add(check);
+  check.Click += (o, e) => { if (selecting) Toggle(task.Id); else { bool done = !task.Done; Commit(() => { TaskRules.Complete(state.Tasks,task,done); }, done ? "已完成任务" : "已恢复任务"); } e.Handled = true; }; DockPanel.SetDock(check, Dock.Left); row.Children.Add(check);
   var edit = Ui.Button("编辑", () => EditTasks(new[] { task.Id }, widget), false, true); edit.Padding = new Thickness(6, 5, 6, 5); edit.Margin = new Thickness(5, 0, 0, 0); DockPanel.SetDock(edit, Dock.Right); row.Children.Add(edit);
   var text = new StackPanel(); var title = Ui.T(task.Title, compact ? 14 : 16, task.Done ? "#8F9BB0" : "#29364D"); if (task.Done) title.TextDecorations = TextDecorations.Strikethrough; text.Children.Add(title);
-  bool late = !task.Done && task.End.HasValue && task.End.Value < DateTime.Now; text.Children.Add(Ui.T(TimeLine(task) + (late ? " · 已逾期" : ""), 10.5, late ? "#C95362" : "#75839D")); text.Children.Add(Ui.T(Ui.Names[task.Quadrant], 10.5, Ui.Colors[task.Quadrant])); row.Children.Add(text);
+  bool late = !task.Done && task.End.HasValue && task.End.Value < DateTime.Now; text.Children.Add(Ui.T(TimeLine(task) + (late ? " · 已逾期" : ""), 10.5, late ? "#C95362" : "#75839D")); text.Children.Add(Ui.T(Ui.Names[task.Quadrant], 10.5, Ui.Colors[task.Quadrant])); if(TaskRules.Description(task).Length>0)text.Children.Add(Ui.T(TaskRules.Description(task),10.5,"#7141BD"));row.Children.Add(text);
   var border = new Border { Focusable = true, CornerRadius = new CornerRadius(10), Padding = new Thickness(compact ? 9 : 12), Margin = new Thickness(0, 0, 0, 7), Child = row, BorderThickness = new Thickness(1), ToolTip = compact && !widget ? "左键拖到其他象限 · 空白处或 Ctrl/Shift 拖动框选 · 双击编辑" : "按住左键拖动框选 · Ctrl/Shift 拖动追加选择 · 双击编辑" };
   (widget ? widgetCards : mainCards).Add(new CardView { Task = task, Border = border, Check = check, Widget = widget });
   var context = new ContextMenu(); AddMenu(context, "选择 / 取消选择", () => Toggle(task.Id)); AddMenu(context, "编辑任务", () => EditTasks(new[] { task.Id }, widget));
@@ -396,7 +403,7 @@ public class MainWindow : Window {
   var count = Ui.T("已选 " + selected.Count + " 项", 12, "#4768B5"); count.Margin = new Thickness(0, 0, 9, 5); panel.Children.Add(count);
   panel.Children.Add(Ui.Button("全选", () => { var tasks = widget ? state.Tasks.Where(x => !x.Done) : Filter(); foreach (var task in tasks) selected.Add(task.Id); UpdateSelection(); }, false, true));
   panel.Children.Add(Ui.Button("编辑", () => EditTasks(selected.ToArray(), widget), false, true)); panel.Children.Add(Ui.Button("移动象限", () => ShowMoveMenu(panel), false, true));
-  panel.Children.Add(Ui.Button("完成", () => { var ids = selected.ToArray(); if (ids.Length > 0 && Commit(() => { foreach (var task in state.Tasks.Where(x => ids.Contains(x.Id))) task.Done = true; }, "已完成 " + ids.Length + " 项")) ClearSelection(); }, false, true));
+  panel.Children.Add(Ui.Button("完成", () => { var ids = selected.ToArray(); if (ids.Length > 0 && Commit(() => { foreach (var task in state.Tasks.Where(x => ids.Contains(x.Id)).ToList()) TaskRules.Complete(state.Tasks,task,true); }, "已完成 " + ids.Length + " 项")) ClearSelection(); }, false, true));
   panel.Children.Add(Ui.Button("删除", () => DeleteTasks(selected.ToArray()), false, true)); panel.Children.Add(Ui.Button("撤销", Undo, false, true)); panel.Children.Add(Ui.Button("取消多选", ClearSelection, false, true));
  }
  void ShowMoveMenu(FrameworkElement target) { if (selected.Count == 0) { Report("请先选择任务"); return; } var menu = new ContextMenu { PlacementTarget = target, Placement = PlacementMode.Bottom }; for (int q = 0; q < 4; q++) { int index = q; AddMenu(menu, Ui.Names[q], () => MoveTasks(selected.ToArray(), index)); } menu.IsOpen = true; }
@@ -413,26 +420,28 @@ public class MainWindow : Window {
   else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.N) { if (sender == sticky) widgetComposer.TitleBox.Focus(); else composer.TitleBox.Focus(); e.Handled = true; }
   else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F) { Restore(); search.Focus(); e.Handled = true; }
  }
- bool ApplyEdit(string[] ids, string title, bool useStart, DateTime? start, bool useEnd, DateTime? end, bool useQuadrant, int q, out string error) {
+ bool ApplyEditWithRules(string[] ids, string title, bool useStart, DateTime? start, bool useEnd, DateTime? end, bool useQuadrant, int q, Action<TaskItem> editRules,out string error) {
   error = null; var tasks = state.Tasks.Where(x => ids.Contains(x.Id)).ToList(); if (tasks.Count == 0) { error = "任务已不存在"; return false; } if (tasks.Count == 1 && String.IsNullOrWhiteSpace(title)) { error = "请填写任务名称"; return false; }
   foreach (var task in tasks) if (!Data.ValidRange(useStart ? start : task.Start, useEnd ? end : task.End)) { error = "「" + task.Title + "」的截止时间不能早于开始时间。"; return false; }
-  return Commit(() => { foreach (var task in tasks) { if (tasks.Count == 1) task.Title = title.Trim(); if (useStart && task.Start != start) { task.Start = start; task.Notified = false; } if (useEnd && task.End != end) { task.End = end; task.EndNotified = false; } if (useQuadrant) task.Quadrant = q; } }, "已更新 " + tasks.Count + " 项任务");
+  return Commit(() => { foreach (var task in tasks) { if (tasks.Count == 1) task.Title = title.Trim(); if (useStart && task.Start != start) { task.Start = start; task.Notified = false; } if (useEnd && task.End != end) { task.End = end; task.EndNotified = false; } if (useQuadrant) task.Quadrant = q;if(editRules!=null)editRules(task); } }, "已更新 " + tasks.Count + " 项任务");
  }
  Window CreateEditor(string[] ids, bool widget) {
   var tasks = state.Tasks.Where(x => ids.Contains(x.Id)).ToList(); if (tasks.Count == 0) return null; bool bulk = tasks.Count > 1; var first = tasks[0]; Window owner = widget && sticky != null ? sticky : this;
-  var w = new Window { Title = bulk ? "批量编辑 " + tasks.Count + " 个待办" : "编辑待办", Width = 470, Height = 475, ResizeMode = ResizeMode.NoResize, Owner = owner, Topmost = owner.Topmost, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Ui.B("#F6F7FB"), FontFamily = FontFamily, Resources = Resources };
-  var p = new StackPanel { Margin = new Thickness(22) }; w.Content = p; p.Children.Add(Ui.T(bulk ? "只修改勾选的字段，其他内容保持不变" : "任务名称", 13, "#61718E"));
+  var w = new Window { Title = bulk ? "批量编辑 " + tasks.Count + " 个待办" : "编辑待办", Width = 470, Height = 690,MaxHeight=SystemParameters.WorkArea.Height-40, ResizeMode = ResizeMode.NoResize, Owner = owner, Topmost = owner.Topmost, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Ui.B("#F6F7FB"), FontFamily = FontFamily, Resources = Resources };
+  var p = new StackPanel { Margin = new Thickness(22) }; w.Content = new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}; p.Children.Add(Ui.T(bulk ? "只修改勾选的字段，其他内容保持不变" : "任务名称", 13, "#61718E"));
   var title = new TextBox { Text = first.Title, Padding = new Thickness(8), Margin = new Thickness(0, 8, 0, 12), Visibility = bulk ? Visibility.Collapsed : Visibility.Visible }; Ui.Name(title, "编辑任务名称"); p.Children.Add(title);
   var useStart = new CheckBox { Content = bulk ? "修改开始时间（日期留空可清除）" : "开始时间（可留空）", IsChecked = !bulk, Margin = new Thickness(0, 9, 0, 2) }; p.Children.Add(useStart); var start = new TimeField("开始", first.Start, "09:00"); p.Children.Add(start);
   var useEnd = new CheckBox { Content = bulk ? "修改截止时间（日期留空可清除）" : "截止时间（可留空）", IsChecked = !bulk, Margin = new Thickness(0, 9, 0, 2) }; p.Children.Add(useEnd); var end = new TimeField("截止", first.End, "18:00"); p.Children.Add(end);
   var useQ = new CheckBox { Content = "修改象限", IsChecked = !bulk, Margin = new Thickness(0, 9, 0, 4) }; p.Children.Add(useQ); var q = new ComboBox { ItemsSource = Ui.Names, SelectedIndex = first.Quadrant, Padding = new Thickness(6) }; Ui.Name(q, "编辑象限"); p.Children.Add(q);
   Action sync = () => { start.IsEnabled = useStart.IsChecked == true; end.IsEnabled = useEnd.IsChecked == true; q.IsEnabled = useQ.IsChecked == true; }; useStart.Click += (o, e) => sync(); useEnd.Click += (o, e) => sync(); useQ.Click += (o, e) => sync(); sync();
+  var rules=new RulesEditor(first,bulk);p.Children.Add(rules);
   var errorLabel = Ui.T("", 12, "#C95362"); errorLabel.Margin = new Thickness(0, 10, 0, 8); p.Children.Add(errorLabel); var actions = new WrapPanel(); p.Children.Add(actions);
-  actions.Children.Add(Ui.Button("保存", () => { DateTime? a = null, b = null; string error; if (useStart.IsChecked == true && !start.Read(out a, out error)) { errorLabel.Text = error; return; } if (useEnd.IsChecked == true && !end.Read(out b, out error)) { errorLabel.Text = error; return; } if (bulk && useStart.IsChecked != true && useEnd.IsChecked != true && useQ.IsChecked != true) { errorLabel.Text = "请勾选至少一个要修改的字段。"; return; } if (ApplyEdit(ids, title.Text, useStart.IsChecked == true, a, useEnd.IsChecked == true, b, useQ.IsChecked == true, q.SelectedIndex, out error)) w.Close(); else errorLabel.Text = error ?? "保存失败"; }, true));
+  actions.Children.Add(Ui.Button("保存", () => { DateTime? a = null, b = null; string error;if(!rules.Validate(out error)){errorLabel.Text=error;return;} if (useStart.IsChecked == true && !start.Read(out a, out error)) { errorLabel.Text = error; return; } if (useEnd.IsChecked == true && !end.Read(out b, out error)) { errorLabel.Text = error; return; } if (bulk && useStart.IsChecked != true && useEnd.IsChecked != true && useQ.IsChecked != true && rules.Enabled.IsChecked != true) { errorLabel.Text = "请勾选至少一个要修改的字段。"; return; } if (ApplyEditWithRules(ids, title.Text, useStart.IsChecked == true, a, useEnd.IsChecked == true, b, useQ.IsChecked == true, q.SelectedIndex,rules.Enabled.IsChecked==true?(Action<TaskItem>)rules.Apply:null, out error)) w.Close(); else errorLabel.Text = error ?? "保存失败"; }, true));
   actions.Children.Add(Ui.Button("删除", () => { DeleteTasks(ids); w.Close(); })); actions.Children.Add(Ui.Button("取消", () => w.Close())); return w;
  }
  void EditTasks(string[] ids, bool widget) { var editor = CreateEditor(ids, widget); if (editor != null) editor.ShowDialog(); }
  void Remind() {
+  if(TaskRules.Advance(state.Tasks,DateTime.Now)){Save();Refresh();}
   var now = DateTime.Now; var starts = state.Tasks.Where(x => !x.Done && !x.Notified && x.Start.HasValue && x.Start <= now).ToList(); var ends = state.Tasks.Where(x => !x.Done && !x.EndNotified && x.End.HasValue && x.End <= now).ToList();
   if (starts.Count + ends.Count > 0) { string text = (starts.Count > 0 ? "开始：" + String.Join("、", starts.Take(3).Select(x => x.Title)) : "") + (ends.Count > 0 ? "\n截止：" + String.Join("、", ends.Take(3).Select(x => x.Title)) : ""); tray.ShowBalloonTip(5000, ends.Count > 0 ? "待办截止提醒" : "待办开始提醒", text.Trim(), Forms.ToolTipIcon.Info); starts.ForEach(x => x.Notified = true); ends.ForEach(x => x.EndNotified = true); Save(); Refresh(); }
  }
@@ -480,18 +489,19 @@ public class MainWindow : Window {
   var ids = selected.ToArray(); MoveTasks(ids, 0); Assert(state.Tasks.Where(x => ids.Contains(x.Id)).All(x => x.Quadrant == 0), "bulk quadrant");
   string error; Assert(ApplyEdit(ids, "", true, DateTime.Today.AddHours(11), true, DateTime.Today.AddHours(21), false, 0, out error), "bulk time edit"); Assert(state.Tasks.Where(x => ids.Contains(x.Id)).All(x => x.Start == DateTime.Today.AddHours(11) && x.End == DateTime.Today.AddHours(21)), "bulk times applied"); Assert(!ApplyEdit(ids, "", true, DateTime.Today.AddDays(1), false, null, false, 0, out error), "partial edit validation");
   DeleteTasks(ids); Assert(state.Tasks.Count == 2, "bulk delete"); Undo(); Assert(state.Tasks.Count == 4, "undo restores batch");
-  var actualEditor = CreateEditor(ids, true); actualEditor.Show(); Pump(50); var editPanel = (StackPanel)actualEditor.Content;
+  var actualEditor = CreateEditor(ids, true); actualEditor.Show(); Pump(50); var editPanel = (StackPanel)((ScrollViewer)actualEditor.Content).Content;
   var endToggle = editPanel.Children.OfType<CheckBox>().ElementAt(1); endToggle.IsChecked = true; endToggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
   var actualEnd = editPanel.Children.OfType<TimeField>().ElementAt(1); actualEnd.Date.SelectedDate = DateTime.Today.AddDays(1); actualEnd.Time.Text = "22:30";
   editPanel.Children.OfType<WrapPanel>().Last().Children.OfType<Button>().First().RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
   Assert(!actualEditor.IsVisible && state.Tasks.Where(x => ids.Contains(x.Id)).All(x => x.End == DateTime.Today.AddDays(1).AddHours(22.5) && x.Start == DateTime.Today.AddHours(11)), "bulk editor saves only enabled end field"); Undo();
-  actualEditor = CreateEditor(new[] { ids[0] }, true); actualEditor.Show(); Pump(50); editPanel = (StackPanel)actualEditor.Content;
+  actualEditor = CreateEditor(new[] { ids[0] }, true); actualEditor.Show(); Pump(50); editPanel = (StackPanel)((ScrollViewer)actualEditor.Content).Content;
   editPanel.Children.OfType<TextBox>().First().Text = "组件内编辑名称"; actualEnd = editPanel.Children.OfType<TimeField>().ElementAt(1); actualEnd.Date.SelectedDate = null; actualEnd.Date.Text = "";
   editPanel.Children.OfType<WrapPanel>().Last().Children.OfType<Button>().First().RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
   Assert(state.Tasks.First(x => x.Id == ids[0]).Title == "组件内编辑名称" && !state.Tasks.First(x => x.Id == ids[0]).End.HasValue, "single editor renames and clears deadline"); Undo();
   ClearSelection();
   var saved = Data.Read(); Assert(saved.Tasks.Count == 4 && saved.Tasks.Any(x => x.End.HasValue), "date persistence"); view = "列表"; Refresh(); Snapshot(this, "list.png"); view = "四象限"; Refresh(); Snapshot(this, "quadrants.png"); Toggle(state.Tasks[0].Id); Toggle(state.Tasks[1].Id); Snapshot(sticky, "sticky.png"); Snapshot(this, "selection.png"); Width=950;Height=760;Snapshot(this,"compact-main.png");sticky.Height=640;Snapshot(sticky,"compact-sticky.png");
   var editor = CreateEditor(new[] { state.Tasks[0].Id }, true); editor.Show(); Pump(100); Snapshot(editor, "editor.png"); editor.Close(); editor = CreateEditor(selected.ToArray(), true); editor.Show(); Pump(100); Snapshot(editor, "bulk-editor.png"); editor.Close();
+  EnhancementsUiTest();
   File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ui-test-result.txt"), "PASS: countdown main/widget settings sync, invalid input rejection and persistence; one saved note below empty input, four-character threshold, punctuation, short-draft preservation and close flush; left-button cross-quadrant drag (12 directions), empty targets, group move, cancellation, no-op, undo and disk persistence; startup switch enable/disable UI; main list, quadrants and widget rectangular selection; reverse-direction and shrinking rectangles; Ctrl/Shift additive selection; viewport clipping; no selection from stationary hold; marquee cancellation; batch start/end creation/editing, range validation, delete/undo, quadrant moves, old data and persistence."); Exit();
  }
  void TestQuadrantDrag() {
@@ -561,7 +571,7 @@ public static class Program {
   } catch (Exception ex) { if (test) { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test-error.txt"), ex.ToString()); Environment.ExitCode = 1; } else MessageBox.Show("程序发生错误：\n" + ex, "待办"); }
  }
  static void SelfTest() {
- WorkdayClock.Test();
+ WorkdayClock.Test();TaskRules.Test();
   Data.Folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test-data-" + Guid.NewGuid().ToString("N"));
   try {
    StartupSettings.TestRegistry();

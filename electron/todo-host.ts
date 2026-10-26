@@ -9,6 +9,8 @@ export class TodoHost {
   server: net.Server|null=null;
   socket: net.Socket|null=null;
   ready=false;
+  private saves=new Map<string,(saved:boolean)=>void>();
+  async flush(){if(!this.child||this.child.exitCode!==null)return true;if(!this.ready)return false;const id=randomBytes(12).toString('hex');return new Promise<boolean>(resolve=>{const timer=setTimeout(()=>{this.saves.delete(id);resolve(false);},5000);this.saves.set(id,saved=>{clearTimeout(timer);resolve(saved);});this.send('SAVE_SNAPSHOT:'+id);});}
   constructor(private onCommand:(command:string)=>void,private onExit:()=>void){}
   send(command:string){if(this.socket&&!this.socket.destroyed)this.socket.write(command.replace(/[\r\n]/g,' ')+'\n',()=>{});}
   async start(executable:string,dataDir:string,appExe:string,startup:boolean,background:boolean,testing:boolean,shortcutConfigured:boolean){
@@ -27,7 +29,7 @@ export class TodoHost {
       socket.on('data',chunk=>{
         buffer+=chunk.toString('utf8');
         while(buffer.includes('\n')){const end=buffer.indexOf('\n'),line=buffer.slice(0,end).trim();buffer=buffer.slice(end+1);
-          if(!this.ready){if(line==='HELLO:'+nonce){this.ready=true;clearTimeout(timeout);resolve();}}else this.onCommand(line);
+          if(!this.ready){if(line==='HELLO:'+nonce){this.ready=true;clearTimeout(timeout);resolve();}}else if(line.startsWith('SAVED_SNAPSHOT:')){const [id,saved]=line.slice(15).split(':');const waiter=this.saves.get(id);if(waiter){this.saves.delete(id);waiter(saved==='1');}}else this.onCommand(line);
         }
       });});
       this.child=spawn(executable,['--managed',...(background?['--background']:[])],{windowsHide:false,stdio:['ignore','ignore','pipe'],env:{...process.env,QIXU_TODO_DATA:folder,QIXU_BRIDGE_NONCE:nonce,QIXU_PIPE_NAME:pipeName,QIXU_APP_EXE:appExe,QIXU_STARTUP:startup?'1':'0',QIXU_TEST:testing?'1':'0',QIXU_BOSS_KEY_CONFIGURED:shortcutConfigured?'1':'0'}});

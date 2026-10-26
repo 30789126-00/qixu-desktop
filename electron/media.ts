@@ -25,14 +25,16 @@ export function mediaScript(command: MediaCommand, platform: string, initiallyBl
     const elements=c.elements(),cmd=${JSON.stringify(command)};
     const chosen=document.querySelector(adapter.selector)||elements.find(el=>{const r=el.getBoundingClientRect();return r.width>120&&r.height>80;})||elements[0];
     const yt=platform==='youtube'?document.querySelector('#movie_player'):null;
+    const adPlaying=platform==='youtube'&&!!document.querySelector('.ad-showing,.ad-interrupting');
+    let seekReady=false;
     const currentTime=()=>{try{if(yt?.getCurrentTime)return Number(yt.getCurrentTime())||0;}catch{}return Number(chosen?.currentTime)||0;};
     const duration=()=>{try{if(yt?.getDuration)return Number(yt.getDuration())||0;}catch{}return Number(chosen?.duration)||0;};
-    const setTime=time=>{if(!Number.isFinite(time)||time<0)return;try{if(yt?.seekTo){yt.seekTo(time,true);return;}}catch{}if(chosen){const apply=()=>{try{chosen.currentTime=Math.min(time,Number.isFinite(chosen.duration)&&chosen.duration>0?Math.max(0,chosen.duration-.05):time);}catch{}};if(chosen.readyState>0)apply();else chosen.addEventListener('loadedmetadata',apply,{once:true});}};
+    const setTime=time=>{if(!Number.isFinite(time)||time<0)return;try{if(yt?.seekTo){yt.seekTo(time,true);return;}}catch{}if(chosen){const apply=()=>{try{chosen.currentTime=Math.min(time,Number.isFinite(chosen.duration)&&chosen.duration>0?Math.max(0,chosen.duration-.05):time);}catch{}};if(chosen.readyState>0)apply();}};
     if(cmd==='pause'){c.blocked=true;elements.forEach(el=>{if(!el.paused&&!el.ended)c.resume.add(el);el.pause();});try{yt?.pauseVideo?.();}catch{}}
     if(cmd==='manualPause'){c.blocked=false;c.resume.clear();elements.forEach(el=>el.pause());try{yt?.pauseVideo?.();}catch{}}
     if(cmd==='resume'){c.blocked=false;const saved=[...c.resume];c.resume.clear();saved.filter(el=>el.isConnected).forEach(el=>el.play().catch(()=>{}));if(saved.some(el=>el.isConnected))try{yt?.playVideo?.();}catch{}}
     if(cmd==='play'){c.blocked=false;c.resume.clear();try{yt?.playVideo?.();}catch{}if(chosen)chosen.play().catch(()=>{});}
-    if(cmd==='seek'){setTime(Number(opts.time)||0);if(opts.autoplay===true){c.blocked=false;try{yt?.playVideo?.();}catch{}if(chosen)chosen.play().catch(()=>{});}else if(opts.autoplay===false){c.resume.clear();try{yt?.pauseVideo?.();}catch{}chosen?.pause?.();}}
+    if(cmd==='seek'&&!adPlaying&&chosen&&chosen.readyState>0){const target=Math.min(Number(opts.time)||0,duration()>0?Math.max(0,duration()-.05):Number(opts.time)||0);if(Math.abs(currentTime()-target)>.5)setTime(target);seekReady=Math.abs(currentTime()-target)<=.75;if(seekReady&&opts.autoplay===true){c.blocked=false;try{yt?.playVideo?.();}catch{}chosen.play().catch(()=>{});}else if(opts.autoplay===false){c.resume.clear();try{yt?.pauseVideo?.();}catch{}chosen.pause();}}
     if(cmd==='fullscreen'){
       let target=null;for(const selector of adapter.fullscreen){target=chosen?.closest?.(selector)||document.querySelector(selector);if(target)break;}target=target||chosen?.parentElement||chosen;
       if(target){
@@ -46,11 +48,11 @@ export function mediaScript(command: MediaCommand, platform: string, initiallyBl
     const hint=/请登录.{0,15}确认.{0,15}不是|Sign in to confirm/i.test(pageText)?'YouTube 要求登录以确认访问，请在网页中操作；当前视频尚未开始播放':'';
     let riskText='';if(platform==='douyin'){const panels=[...document.querySelectorAll('[role="dialog"],[role="alert"],[class*="login"],[class*="verify"],[class*="captcha"],[class*="toast"]')];riskText=panels.slice(0,60).map(el=>el.innerText||'').join(' ');if((document.body?.innerText||'').length<5000)riskText+=' '+(document.body?.innerText||'');}
     const rateLimited=/访问太频繁|访问过于频繁|操作太频繁|操作过于频繁|请求太频繁|请求过于频繁|验证次数过多/.test(riskText);
-    return {count:elements.length,playing:elements.some(el=>!el.paused&&!el.ended&&(typeof el.readyState!=='number'||el.readyState>=2)),paused:elements.every(el=>el.paused),blocked:c.blocked,hint,currentTime:currentTime(),duration:duration(),rateLimited};
+    return {count:elements.length,playing:elements.some(el=>!el.paused&&!el.ended&&(typeof el.readyState!=='number'||el.readyState>=2)),paused:elements.every(el=>el.paused),blocked:c.blocked,hint,currentTime:currentTime(),duration:duration(),rateLimited,adPlaying,seekReady};
   })()`;
 }
 
-export interface MediaResult { count: number; playing: boolean; paused: boolean; blocked: boolean; hint?: string; currentTime: number; duration: number; rateLimited?: boolean; }
+export interface MediaResult { count: number; playing: boolean; paused: boolean; blocked: boolean; hint?: string; currentTime: number; duration: number; rateLimited?: boolean;adPlaying?:boolean;seekReady?:boolean; }
 
 export async function controlMedia(contents: WebContents, command: MediaCommand, platform: string, blocked: boolean, options: MediaCommandOptions = {}): Promise<MediaResult[]> {
   if (contents.isDestroyed()) return [];

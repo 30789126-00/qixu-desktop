@@ -1,0 +1,38 @@
+import fs from 'node:fs/promises';
+import {createReadStream,createWriteStream} from 'node:fs';
+import {Readable,Transform} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
+import {createHash,randomUUID} from 'node:crypto';
+import path from 'node:path';
+import {saveDurableState,loadDurableState} from './state-store';
+import type {UpdateInfo} from '../shared/types';
+interface Installer {id:string;version:string;file:string;sha256:string;}
+const repo='https://api.github.com/repos/30789126-00/qixu-desktop';
+export function parseVersion(value:string){const match=/^v?(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(value);if(!match)throw Error('版本号无效');return match.slice(1).map(Number);}
+export function newer(a:string,b:string){const x=parseVersion(a),y=parseVersion(b);for(let i=0;i<3;i++)if(x[i]!==y[i])return x[i]>y[i];return false;}
+async function hashFile(file:string){const hash=createHash('sha256');for await(const part of createReadStream(file))hash.update(part);return hash.digest('hex');}
+export class UpdateService {
+ readonly info:UpdateInfo;private installers:Installer[]=[];private release:{version:string;url:string;sha256:string;size:number}|null=null;private ready:Promise<void>;private busy=false;
+ constructor(readonly folder:string,current:string,private request:typeof fetch=fetch,private feed=repo+'/releases/latest'){
+  this.info={current,latest:current,available:false,notes:'',url:'https://github.com/30789126-00/qixu-desktop/releases',rollback:[],progress:0,status:'尚未检查更新'};this.ready=this.load();
+ }
+ private async load(){try{const {data}=await loadDurableState(path.join(this.folder,'installers.json'));if(Array.isArray(data?.installers))for(const item of data.installers){if(typeof item.id!=='string'||!/^[-\w]{1,100}$/.test(item.id)||typeof item.file!=='string'||!/^setup-[-\w.]+\.exe$/.test(item.file)||!/^[a-f0-9]{64}$/.test(item.sha256))continue;try{parseVersion(item.version);await fs.access(path.join(this.folder,item.file));this.installers.push(item);}catch{}}}catch{}
+  const file=`setup-seed-${this.info.current}.exe`;if(!this.installers.some(item=>item.version===this.info.current)){try{const target=path.join(this.folder,file),stat=await fs.stat(target);if(stat.size<1024||stat.size>2*1024**3)throw Error('Invalid installer');const handle=await fs.open(target,'r'),head=Buffer.alloc(2);try{await handle.read(head,0,2,0);}finally{await handle.close();}if(head.toString()!=='MZ')throw Error('Invalid installer');this.installers.unshift({id:randomUUID(),file,version:this.info.current,sha256:await hashFile(target)});await saveDurableState(path.join(this.folder,'installers.json'),{installers:this.installers.slice(0,5)});}catch{}}
+  this.sync();}
+ private sync(){this.info.rollback=this.installers.filter(i=>newer(this.info.current,i.version)).map(i=>({id:i.id,version:i.version}));this.info.downloaded=this.installers.find(i=>i.version===this.info.latest)?.id;}
+ async check(){await this.ready;if(this.busy)throw Error('请等待下载结束');this.info.status='正在检查更新';try{const response=await this.request(this.feed,{headers:{Accept:'application/vnd.github+json','User-Agent':'Qixu-Desktop'},signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('GitHub 返回 HTTP '+response.status);const value=await response.json() as any,version=String(value.tag_name).replace(/^v/,'');parseVersion(version);const name=`Qixu-Setup-${version}-x64.exe`,asset=value.assets?.find((a:any)=>a.name===name),digest=asset?.digest?.replace(/^sha256:/,'');if(value.draft||value.prerelease||!asset||!/^[a-f0-9]{64}$/.test(digest)||!Number.isSafeInteger(asset.size)||asset.size<1024||asset.size>2*1024**3)throw Error('发布页缺少有效的安装包与 SHA256');
+   this.release={version,url:`https://github.com/30789126-00/qixu-desktop/releases/download/${encodeURIComponent(value.tag_name)}/${name}`,sha256:digest,size:asset.size};Object.assign(this.info,{latest:version,available:newer(version,this.info.current),notes:String(value.body||'').slice(0,16000),url:`https://github.com/30789126-00/qixu-desktop/releases/tag/${encodeURIComponent(value.tag_name)}`,status:newer(version,this.info.current)?'发现新版本':'当前已是最新稳定版'});this.sync();return this.snapshot();
+  }catch(e){this.info.status='检查失败：'+(e instanceof Error?e.message:String(e));throw e;}}
+ snapshot(){return {...this.info,rollback:this.info.rollback.map(i=>({...i}))};}
+ async download(){await this.ready;if(this.busy)throw Error('已有下载正在进行');if(!this.release)await this.check();const release=this.release!;this.busy=true;this.info.progress=0;this.info.status='正在下载，完成后校验 SHA256';await fs.mkdir(this.folder,{recursive:true});const file=`setup-${release.version}-${release.sha256.slice(0,12)}.exe`,target=path.join(this.folder,file),part=target+'.part';
+  try{const response=await this.request(release.url,{signal:AbortSignal.timeout(20*60000)});if(!response.ok||!response.body)throw Error('下载返回 HTTP '+response.status);const hash=createHash('sha256');let bytes=0;const meter=new Transform({transform:(chunk,_encoding,done)=>{bytes+=chunk.length;if(bytes>release.size){done(Error('下载文件超过发布大小'));return;}hash.update(chunk);this.info.progress=Math.min(99,Math.floor(bytes/release.size*100));done(null,chunk);}});await pipeline(Readable.fromWeb(response.body as any),meter,createWriteStream(part));if(bytes!==release.size||hash.digest('hex')!==release.sha256)throw Error('下载大小或 SHA256 不匹配，未安装');const handle=await fs.open(part,'r');try{const head=Buffer.alloc(2);await handle.read(head,0,2,0);if(head.toString()!=='MZ')throw Error('下载文件不是 Windows 安装程序');}finally{await handle.close();}await fs.rename(part,target);const item={id:randomUUID(),version:release.version,file,sha256:release.sha256};this.installers=[item,...this.installers.filter(i=>i.version!==item.version)].slice(0,5);await saveDurableState(path.join(this.folder,'installers.json'),{installers:this.installers});this.info.progress=100;this.info.status='下载和校验完成，等待你选择安装';this.sync();return this.snapshot();
+  }catch(e){this.info.status='下载失败：'+(e instanceof Error?e.message:String(e));await fs.rm(part,{force:true}).catch(()=>{});throw e;}finally{this.busy=false;}}
+ async installer(id?:string){await this.ready;const item=this.installers.find(i=>i.id===(id||this.info.downloaded));if(!item)throw Error('请先下载并校验安装包');const file=path.join(this.folder,item.file);if(await hashFile(file)!==item.sha256)throw Error('安装包已变化，请重新下载');return {...item,path:file};}
+}
+/** Runs only after the original app has fully exited, then reopens the app. */
+export const installHelper=String.raw`const fs=require('fs'),path=require('path'),crypto=require('crypto'),{spawn}=require('child_process');
+const [installer,expected,parentId,appExe,resultFile]=process.argv.slice(2);let waited=0;
+async function run(){while(true){let alive=true;try{process.kill(Number(parentId),0);}catch(error){if(error.code==='ESRCH')alive=false;else throw error;}if(!alive)break;if(waited++>120)throw Error('应用未能退出，安装已取消');await new Promise(r=>setTimeout(r,250));}
+const hash=crypto.createHash('sha256');for await(const chunk of fs.createReadStream(installer))hash.update(chunk);if(hash.digest('hex')!==expected)throw Error('安装包校验失败');
+await new Promise((resolve,reject)=>{const child=spawn(installer,['/S'],{windowsHide:true,stdio:'ignore'});child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error('安装失败：'+code)));});fs.writeFileSync(resultFile,JSON.stringify({ok:true,at:Date.now()}));}
+run().catch(error=>{fs.writeFileSync(resultFile,JSON.stringify({ok:false,error:String(error.message),at:Date.now()}));}).finally(()=>{const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;const child=spawn(appExe,[],{detached:true,stdio:'ignore',windowsHide:true,env});child.unref();});`;

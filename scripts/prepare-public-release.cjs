@@ -46,7 +46,10 @@ async function main() {
   await fs.copyFile(srcInstaller, path.join(output, installer));
   await fs.copyFile(path.join(root, `docs/release-notes-${version}.md`), path.join(output, `Qixu-Release-${version}.md`));
 
-  const names = [installer, archive, `Qixu-Release-${version}.md`];
+  await fs.copyFile(path.join(root, 'docs/使用说明.md'), path.join(output, '栖序-使用说明.md'));
+  await fs.copyFile(path.join(root, 'docs/features-'+version+'.md'), path.join(output, 'Qixu-Features-'+version+'.md'));
+  await fs.copyFile(path.join(root, 'docs/test-record-'+version+'.md'), path.join(output, 'Qixu-Tests-'+version+'.md'));
+  const names = [installer, archive, '栖序-使用说明.md', 'Qixu-Features-'+version+'.md', 'Qixu-Tests-'+version+'.md', `Qixu-Release-${version}.md`];
   const lines = [];
   for (const name of names) {
     const p = path.join(output, name);

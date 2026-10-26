@@ -58,3 +58,6 @@ test('1.7 Bilibili adapter uses in-app fullscreen CSS and preserves controllable
 test('1.7 media seek restores time and respects whether playback was active before restart',()=>{
   const env=mediaEnv();env.run('seek',{time:63,autoplay:false});assert.equal(env.video.currentTime,63);assert.equal(env.video.paused,true);env.run('seek',{time:27,autoplay:true});assert.equal(env.video.currentTime,27);assert.equal(env.video.paused,false);
 });
+test('Media recovery waits for metadata and does not autoplay or acknowledge an unloaded video',()=>{
+ const env=mediaEnv();env.video.readyState=0;env.video.currentTime=0;env.video.paused=true;const waiting=env.run('seek',{time:27,autoplay:true});assert.equal(waiting.seekReady,false);assert.equal(env.video.paused,true);assert.equal(env.video.currentTime,0);env.video.readyState=2;const ready=env.run('seek',{time:27,autoplay:true});assert.equal(ready.seekReady,true);assert.equal(env.video.currentTime,27);assert.equal(env.video.paused,false);
+});

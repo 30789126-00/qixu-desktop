@@ -174,6 +174,12 @@ function browserController(command:string,args:any):any {
   }
  }
  const video=c.player();let captions:any[]=[];
+ // Keep nearby subtitle results; seeking back reuses the bounded host cache.
+ const keep=new Set(c.cues.filter((q:any)=>video&&q.end>=video.currentTime-90&&q.start<=video.currentTime+120).map((q:any)=>q.id));let captionBytes=0;
+ for(const [id,value] of [...c.translations].reverse()){captionBytes+=((value.zh?.length||0)+(value.en?.length||0))*2;if((!keep.has(id)&&c.translations.size>400)||captionBytes>512*1024){c.translations.delete(id);c.cueStates.delete(id);}}
+ for(const id of c.cueStates.keys())if(!keep.has(id)&&!c.translations.has(id))c.cueStates.delete(id);
+ for(const [id,item] of c.nodes)if(!item.el.isConnected)c.nodes.delete(id);
+ while(c.nodes.size>800){const id=c.nodes.keys().next().value;c.nodes.get(id)?.translation?.remove();c.nodes.delete(id);}
  if(c.subtitles&&video&&!c.adPlaying()){c.refreshCaptions(video);captions=c.cues.filter((q:any)=>q.end>=video.currentTime&&q.start<=video.currentTime+30&&!c.cueStates.has(q.id)).slice(0,args.captionBudget??6);for(const cue of captions)c.cueStates.set(cue.id,'queued');}
  if(c.adPlaying())return {pages,captions:[],reason:'广告播放中，正片开始后显示双语字幕',pageLanguage:document.documentElement.lang};
  return {pages,captions,reason:c.subtitles?(video?(c.cues.length?(c.translations.size?'双语字幕已开启':'字幕已读取，正在本地翻译…'):c.nativeTranscriptError||c.nativeCaptionError||c.captionReason||'正在读取视频字幕'):'等待选择视频'):'双语字幕已关闭',pageLanguage:document.documentElement.lang};

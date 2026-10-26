@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { AppAPI, AppState } from '../shared/types';
 const invoke = (method: string, ...args: unknown[]) => ipcRenderer.invoke('moyu:invoke', method, ...args);
 const api: AppAPI = {
+  getMaintenance:()=>invoke('getMaintenance'),openMaintenance:()=>invoke('openMaintenance'),retrySave:()=>invoke('retrySave'),createBackup:includeAccounts=>invoke('createBackup',includeAccounts),previewRestore:id=>invoke('previewRestore',id),restoreBackup:token=>invoke('restoreBackup',token),exportDiagnostics:()=>invoke('exportDiagnostics'),checkUpdates:()=>invoke('checkUpdates'),downloadUpdate:()=>invoke('downloadUpdate'),installUpdate:id=>invoke('installUpdate',id),videoProgress:()=>invoke('videoProgress'),sleepBrowserTab:id=>invoke('sleepBrowserTab',id),
   speakBook:segment=>invoke('speakBook',segment),
+  getBookCover:id=>invoke('getBookCover',id),
   narrationAction:(action,runId)=>invoke('narrationAction',action,runId),
   updateBossKey: patch=>invoke('updateBossKey',patch),
   submitPassword: password=>invoke('submitPassword',password),

@@ -134,6 +134,7 @@ public static class ManagedBridge {
  }
  static void Receive(string command) {
   if(NativeNarration.Receive(command))return;
+  if(command.StartsWith("SAVE_SNAPSHOT:")){Send("SAVED_SNAPSHOT:"+command.Substring(14)+":"+(window.BridgeFlushData()?"1":"0"));return;}
   if(command=="TEST_CTRL_ALT"&&Environment.GetEnvironmentVariable("QIXU_TEST")=="1"){chord=false;HandleKey(Key.LeftAlt,ModifierKeys.Control|ModifierKeys.Alt,true,false);}
   if(Environment.GetEnvironmentVariable("QIXU_TEST")=="1") {
    if(command=="TEST_GLOBAL_CTRL_ALT"){keybd_event(0x11,0,0,UIntPtr.Zero);keybd_event(0x12,0,0,UIntPtr.Zero);keybd_event(0x12,0,2,UIntPtr.Zero);keybd_event(0x11,0,2,UIntPtr.Zero);}

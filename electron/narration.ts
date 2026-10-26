@@ -1,12 +1,13 @@
 import type { NarrationSegment, NarrationState } from '../shared/types';
 
 export const emptyNarration = ():NarrationState => ({status:'idle',bookId:null,runId:'',segmentId:'',voices:[],error:'',character:0});
-interface Context { unlocked:boolean; bookId:string|null; visible:boolean; suspended:boolean; continueHidden:boolean; voice:string; rate:number; }
+interface Context { unlocked:boolean; bookId:string|null; visible:boolean; suspended:boolean; continueHidden:boolean; voice:string; rate:number; sleepMinutes?:number; }
 const encode=(text:string)=>Buffer.from(text,'utf8').toString('base64');
 export class NarrationService {
  readonly state=emptyNarration();
  private current:{segment:NarrationSegment;job:string;submitted:boolean}|null=null;
  private serial=0;private autoResume=false;private pendingFinish=false;
+ private sleepTimer:ReturnType<typeof setTimeout>|undefined;private sleepMinutes=0;
  constructor(private send:(command:string)=>void,private context:()=>Context,private changed:()=>void){}
  private notify(){this.changed();}
  private blocked(){const c=this.context();return c.suspended||(!c.visible&&!c.continueHidden);}
@@ -21,6 +22,7 @@ export class NarrationService {
   const c=this.context();
   if(!c.unlocked||c.bookId!==segment.bookId)throw Error('请在当前书籍中启动朗读');
   if(!segment.text.trim()||segment.text.length>2400||!/^[\w-]{1,80}$/.test(segment.runId)||!/^[-\w:.]{1,120}$/.test(segment.segmentId))throw Error('朗读段落格式无效');
+  if(segment.runId!==this.state.runId)this.setSleep(c.sleepMinutes||0);
   this.send('SPEECH_STOP');this.current={segment:{...segment,text:segment.text.trim()},job:String(++this.serial),submitted:false};
   Object.assign(this.state,{bookId:segment.bookId,runId:segment.runId,segmentId:segment.segmentId,character:0,error:''});
   this.autoResume=false;this.pendingFinish=false;
@@ -38,14 +40,16 @@ export class NarrationService {
  }
  stop(runId?:string){
   if(runId&&this.state.runId!==runId)return;
-  this.autoResume=false;this.pendingFinish=false;this.current=null;++this.serial;this.send('SPEECH_STOP');
+  clearTimeout(this.sleepTimer);this.state.sleepUntil=undefined;this.autoResume=false;this.pendingFinish=false;this.current=null;++this.serial;this.send('SPEECH_STOP');
   if(this.state.status!=='idle'){Object.assign(this.state,{status:'idle',bookId:null,runId:'',segmentId:'',error:'',character:0});this.notify();}
  }
  sync(){
   if(!this.current)return;const c=this.context();
   if(!c.unlocked||c.bookId!==this.state.bookId||c.suspended){this.stop();return;}
+  if((c.sleepMinutes||0)!==this.sleepMinutes)this.setSleep(c.sleepMinutes||0);
   if(this.blocked())this.pause(true);else if(this.autoResume)this.resume();
  }
+ private setSleep(minutes:number){clearTimeout(this.sleepTimer);this.sleepMinutes=minutes;this.state.sleepUntil=minutes>0?Date.now()+minutes*60000:undefined;if(minutes>0){this.sleepTimer=setTimeout(()=>this.stop(),minutes*60000);this.sleepTimer.unref?.();}}
  receive(command:string){
   if(command.startsWith('SPEECH_VOICES:')){
    this.state.voices=command.slice(14).split(';').filter(Boolean).slice(0,100).map(row=>{const [name,language]=row.split('|');return {name:Buffer.from(name,'base64').toString('utf8'),language:Buffer.from(language||'','base64').toString('utf8')};});this.notify();return true;

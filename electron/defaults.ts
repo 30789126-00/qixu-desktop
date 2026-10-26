@@ -1,5 +1,5 @@
 import type { Settings, Source } from '../shared/types';
-export const defaultSettings: Settings = { theme: 'system', opacity: 1, alwaysOnTop: false, autoHide: true, shortcut: 'Ctrl+Alt+Space', launchAtLogin: false, fontSize: 20, lineHeight: 1.9, readerWidth: 720, readerTheme: 'sepia', scrollSpeed: 25, autoTranslate:true,bilingualSubtitles:true,translationDisabledSites:[],autoSkipYouTubeAds:true,narrationVoice:'',narrationRate:0,narrationContinueHidden:false };
+export const defaultSettings: Settings = { theme: 'system', opacity: 1, alwaysOnTop: false, autoHide: true, shortcut: 'Ctrl+Alt+Space', launchAtLogin: false, fontSize: 20, lineHeight: 1.9, readerWidth: 720, readerTheme: 'sepia', scrollSpeed: 25, autoTranslate:true,bilingualSubtitles:true,translationDisabledSites:[],autoSkipYouTubeAds:true,narrationVoice:'',narrationRate:0,narrationContinueHidden:false,narrationSleepMinutes:0,narrationStopAtChapter:false,tabSleepMinutes:15,tabSleepExceptions:[],diagnosticsEnabled:false };
 export const aikanSource: Source = { id:'aikan', title:'爱看', url:'https://ikapp.com/', kind:'video', color:'#9474e8', abbr:'爱' };
 export function ensurePermanentSources(sources:Source[]):Source[]{
  const found=sources.findIndex(s=>s.id==='aikan'||new URL(s.url).hostname.replace(/^www\./,'')==='ikapp.com');
@@ -40,5 +40,10 @@ export function sanitizeSettings(input: Partial<Settings>, base = defaultSetting
     narrationVoice:typeof input.narrationVoice==='string'&&input.narrationVoice.length<=200?input.narrationVoice:base.narrationVoice,
     narrationRate:Math.round(clamp(input.narrationRate,-5,5,base.narrationRate)),
     narrationContinueHidden:typeof input.narrationContinueHidden==='boolean'?input.narrationContinueHidden:base.narrationContinueHidden,
+    narrationSleepMinutes:Math.round(clamp(input.narrationSleepMinutes,0,180,base.narrationSleepMinutes)),
+    narrationStopAtChapter:typeof input.narrationStopAtChapter==='boolean'?input.narrationStopAtChapter:base.narrationStopAtChapter,
+    tabSleepMinutes:Math.round(clamp(input.tabSleepMinutes,0,180,base.tabSleepMinutes)),
+    tabSleepExceptions:Array.isArray(input.tabSleepExceptions)?[...new Set(input.tabSleepExceptions.filter(s=>typeof s==='string'&&/^[a-z0-9.-]+$/i.test(s)).slice(0,80))]:base.tabSleepExceptions,
+    diagnosticsEnabled:typeof input.diagnosticsEnabled==='boolean'?input.diagnosticsEnabled:base.diagnosticsEnabled,
     translationDisabledSites:Array.isArray(input.translationDisabledSites)?[...new Set(input.translationDisabledSites.filter(s=>typeof s==='string'&&/^[a-z0-9.-]+$/i.test(s)).slice(0,200))]:base.translationDisabledSites };
 }

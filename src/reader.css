@@ -58,6 +58,8 @@
 .reader-auto:hover,.reader-auto.is-running { background:var(--reader-border); color:var(--reader-accent); }
 .reader-speak { display:flex;align-items:center;gap:6px;white-space:nowrap;padding:8px 10px;border:1px solid var(--reader-border);border-radius:9px;background:transparent;font-size:11px!important; }
 .reader-speak:hover,.reader-speak.is-running { background:var(--reader-border);color:var(--reader-accent); }
+.reader-current-sentence {display:flex;align-items:center;gap:7px;border-top:1px solid var(--reader-border);padding:7px 12px;font-size:12px;flex-shrink:0;background:var(--reader-bg);}
+.reader-current-sentence>span {flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.reader-current-sentence b{color:var(--reader-accent);}.reader-current-sentence button{border:0;background:transparent;color:inherit;padding:5px;display:flex;}.reader-current-sentence small{font-size:10px;color:var(--reader-soft);}
 .reader-narration .reader-panel-hint { margin:0 0 16px; }
 .reader-narration .reader-check { display:flex;align-items:center;gap:9px;margin-bottom:10px; }
 .reader-narration .reader-check>span { margin:0;display:inline;font-size:12px; }

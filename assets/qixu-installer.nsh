@@ -4,3 +4,9 @@
   IfFileExists "F:\栖序\栖序.exe" 0 +2
     StrCpy $INSTDIR "F:\栖序"
 !macroend
+
+!macro customInstall
+  ; Keep the installer that produced the current version for a later rollback.
+  CreateDirectory "$APPDATA\Moyu\updates"
+  CopyFiles /SILENT "$EXEPATH" "$APPDATA\Moyu\updates\setup-seed-${VERSION}.exe"
+!macroend

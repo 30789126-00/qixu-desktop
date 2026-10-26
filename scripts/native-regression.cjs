@@ -1,0 +1,3 @@
+const {spawnSync}=require('node:child_process'),p=require('node:path'),fs=require('node:fs');
+const folder=process.env.QIXU_EXECUTABLE?p.join(p.dirname(process.env.QIXU_EXECUTABLE),'resources/native'):p.resolve(__dirname,'../native');
+for(const flag of ['--self-test','--ui-test']){const result=spawnSync(p.join(folder,'TodoHost.exe'),[flag],{windowsHide:true,timeout:90000,encoding:'utf8'});if(result.error||result.status!==0)throw Error(flag+': '+(result.error||result.stderr||fs.readFileSync(p.join(folder,'ui-test-error.txt'),'utf8')));console.log('PASS native '+flag+' (recurrence, project/tags, weekday schedule, retry, drag, notes and original regressions)');}

@@ -5,6 +5,9 @@ import { ArrowLeft, Bookmark as BookmarkIcon, BookOpen, Check, ChevronLeft, Chev
 import type { Book, Bookmark, BookProgress, NarrationState, Settings, WindowState } from '../shared/types';
 import type { TextIndex, TextMatch } from './readerText';
 import { useBookNarration } from './useBookNarration';
+import { EpubResources } from './epubResources';
+import { EpubSearchIndex } from './epubSearch';
+import {captureEpubAnchor,alignEpubAnchor,captureTextAnchor,alignTextAnchor,type ReadingAnchor,type TextReadingAnchor} from './readerAnchor';
 import './reader.css';
 
 interface ReaderProps {
@@ -17,6 +20,7 @@ type Panel = 'contents' | 'search' | 'bookmarks' | 'appearance' | 'narration' | 
 const palette = { light: { bg: '#fcfcfa', fg: '#30332f' }, sepia: { bg: '#f5eddd', fg: '#594c39' }, dark: { bg: '#20231f', fg: '#dadfd4' } };
 const bounded = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
+const appearanceKey=(settings:Settings)=>[settings.fontSize,settings.lineHeight,settings.readerWidth,settings.readerTheme].join(':');
 
 export default function Reader({ book, settings, narration, windowState, onClose, onSettingsChange }: ReaderProps) {
   const [text, setText] = useState<TextIndex | null>(null);
@@ -32,6 +36,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchCount, setSearchCount] = useState(0);
+  const [indexProgress,setIndexProgress]=useState<{sections:number;total:number;cached:boolean}|null>(null);
   const [encoding, setEncoding] = useState(book.encoding || 'auto');
   const [revision, setRevision] = useState(0);
   const viewport = useRef<HTMLDivElement>(null);
@@ -59,6 +64,12 @@ export default function Reader({ book, settings, narration, windowState, onClose
   const interruptVoice=useRef<()=>void>(()=>{});
   const navigationSerial=useRef(0),navigationQueue=useRef(Promise.resolve()),navigationTarget=useRef<string|null>(null);
   const deferredSpeechPosition=useRef<string|null>(null);
+  const resourcesRef=useRef<EpubResources|null>(null),indexRef=useRef<EpubSearchIndex|null>(null),anchorRef=useRef<ReadingAnchor|null>(null);
+  const appliedAppearance=useRef(appearanceKey(settings));
+  const resizingEpub=useRef(0);
+  const resizeSnapshot=useRef<ReadingAnchor|null>(null),resizeSettling=useRef(false),readingIntent=useRef(0);
+  const textAnchor=useRef<TextReadingAnchor|null>(null),textAligning=useRef(0);
+  const textRestoring=useRef({serial:0,busy:false});
   textRef.current = text;
 
   const virtualizer = useVirtualizer({
@@ -77,7 +88,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
   const virtualizerRef = useRef(virtualizer);
   virtualizerRef.current = virtualizer;
 
-  const pauseManually = useCallback(() => { autoResume.current = false; setRunning(false);interruptVoice.current(); }, []);
+  const pauseManually = useCallback(() => { readingIntent.current++;autoResume.current = false; setRunning(false);interruptVoice.current(); }, []);
   const publishProgress = useCallback((position: string, progress: number) => {
     if (performance.now() < suppressProgressUntil.current) return;
     const next = bounded(Number.isFinite(progress) ? progress : 0, 0, 100);
@@ -100,14 +111,38 @@ export default function Reader({ book, settings, narration, windowState, onClose
     const [, indexText, ratioText] = position.split(':');
     const index = bounded(Number(indexText) || 0, 0, textRef.current.paragraphs.length - 1);
     const ratio = bounded(Number(ratioText) || 0, 0, 1);
-    suppressProgressUntil.current = performance.now() + 160;
+    const serial=++textRestoring.current.serial,intent=readingIntent.current;
+    textRestoring.current.busy=true;
+    suppressProgressUntil.current = performance.now() + 800;
+    if(viewport.current)viewport.current.dataset.restoring='true';
     if (measure) virtualizerRef.current.measure();
     virtualizerRef.current.scrollToIndex(index, { align: 'start' });
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    let frames=0,stable=0,previous=-1;
+    const align=()=>{
+      if(serial!==textRestoring.current.serial)return;
+      const element=viewport.current;
+      if(!element||intent!==readingIntent.current){textRestoring.current.busy=false;suppressProgressUntil.current=0;if(element)element.dataset.restoring='false';return;}
       const measured = virtualizerRef.current.getVirtualItems().find(item => item.index === index);
-      if (measured && viewport.current) viewport.current.scrollTop = measured.start + measured.size * ratio;
-    }));
+      if(measured){const desired=measured.start+measured.size*ratio;stable=Math.abs(previous-desired)<.5&&Math.abs(element.scrollTop-desired)<1?stable+1:0;previous=desired;virtualizerRef.current.scrollToOffset(desired);}
+      else{stable=0;virtualizerRef.current.scrollToIndex(index,{align:'start'});}
+      if(++frames<48&&(frames<6||stable<5))requestAnimationFrame(align);
+      else{textRestoring.current.busy=false;element.dataset.restoring='false';textAnchor.current=captureTextAnchor(element)||textAnchor.current;suppressProgressUntil.current=performance.now()+80;}
+    };requestAnimationFrame(align);
   }, []);
+  const restoreTextAnchor=useCallback(()=>{
+    const anchor=textAnchor.current;
+    if(!anchor){restoreTextPosition(progressRef.current?.position||'txt:0:0',true);return;}
+    const serial=++textAligning.current,intent=readingIntent.current;
+    if(viewport.current)viewport.current.dataset.layoutAnchor=JSON.stringify(anchor);
+    suppressProgressUntil.current=performance.now()+650;
+    virtualizerRef.current.measure();virtualizerRef.current.scrollToIndex(anchor.index,{align:'start'});
+    let frames=0;
+    const align=()=>{if(serial!==textAligning.current)return;if(intent!==readingIntent.current){textAligning.current=0;return;}
+      if(viewport.current)alignTextAnchor(viewport.current,anchor);
+      if(++frames<24)requestAnimationFrame(align);
+      else{textAligning.current=0;suppressProgressUntil.current=0;if(viewport.current)textAnchor.current=captureTextAnchor(viewport.current)||anchor;}
+    };requestAnimationFrame(align);
+  },[restoreTextPosition]);
 
   const moveReadingPosition = useCallback((position:string):Promise<void>=>{
     // Hidden windows may stop animation frames. Keep native speech moving and
@@ -121,18 +156,20 @@ export default function Reader({ book, settings, narration, windowState, onClose
     deferredSpeechPosition.current=null;
     if(position.startsWith('txt:')){restoreTextPosition(position);return Promise.resolve();}
     const serial=++navigationSerial.current;navigationTarget.current=position;
+    if(epubHost.current)epubHost.current.dataset.navigationTarget=position;
     const task=navigationQueue.current.catch(()=>{}).then(async()=>{
       if(serial!==navigationSerial.current||!renditionRef.current)return;
       await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
       if(serial!==navigationSerial.current)return;
-      await renditionRef.current.display(position);
+      const release=resourcesRef.current?.hold();try{await renditionRef.current.display(position);if(epubHost.current)epubHost.current.dataset.lastDisplay=position;}finally{release?.();}
       if(serial===navigationSerial.current)navigationTarget.current=null;
     });
     navigationQueue.current=task;return task;
   },[restoreTextPosition,publishProgress]);
-  const voice=useBookNarration({book,state:narration,text,progress:()=>progressRef.current,epub:()=>epubRef.current,location:()=>locationRef.current,move:moveReadingPosition,pauseScroll:()=>{autoResume.current=false;setRunning(false);}});
+  const voice=useBookNarration({book,state:narration,text,progress:()=>progressRef.current,epub:()=>epubRef.current,location:()=>locationRef.current,resources:()=>resourcesRef.current,stopAtChapter:settings.narrationStopAtChapter,chapter:index=>{let found=0;for(const chapter of chapters){const value=book.type==='txt'?Number(chapter.position.split(':')[1]):epubRef.current?.spine.get(chapter.position)?.index;if(Number.isFinite(value)&&value<=index)found=Math.max(found,value);}return found;},move:position=>{readingIntent.current++;resizeSnapshot.current=null;resizeSettling.current=false;return moveReadingPosition(position);},pauseScroll:()=>{autoResume.current=false;setRunning(false);}});
   interruptVoice.current=voice.pause;
   const goTo = useCallback((position: string) => {
+    resizeSnapshot.current=null;resizeSettling.current=false;
     pauseManually();voice.stop();
     void moveReadingPosition(position).catch((failure:unknown)=>{navigationTarget.current=null;setNotice(`无法跳转：${errorMessage(failure)}`);});
   }, [pauseManually,moveReadingPosition,voice.stop]);
@@ -171,6 +208,8 @@ export default function Reader({ book, settings, narration, windowState, onClose
     let rendition: any = null;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let epubResize:ResizeObserver|undefined,resizeTimer:ReturnType<typeof setTimeout>|undefined;
+    let anchorScroller:HTMLElement|null=null,anchorScroll:(()=>void)|undefined;
+    let captureResize:(()=>void)|undefined,settleTimer:ReturnType<typeof setTimeout>|undefined;
     const id = book.id;
     if (lastBookId.current !== id) {
       lastBookId.current = id;
@@ -213,6 +252,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
           if (!epubHost.current) return;
           epubBook = ePub(buffer);
           epubRef.current = epubBook;
+          resourcesRef.current=new EpubResources(epubBook,()=>{const visible=renditionRef.current?.manager?.views?.all?.()||[];return visible.map((v:any)=>v.section.index).concat(locationRef.current?.start?.index??0);},stats=>{if(epubHost.current)epubHost.current.dataset.loadedDocuments=String(stats.loaded);});
           // Strip executable elements before serialization, in addition to iframe sandboxing.
           epubBook.spine.hooks.content.register((document: Document) => {
             document.querySelectorAll('script,iframe,object,embed,base,form').forEach(node => node.remove());
@@ -230,6 +270,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
           // Load earlier sections only when the reader actually moves upward.
           rendition = epubBook.renderTo(epubHost.current, { width: '100%', height: '100%', manager: 'continuous', flow: 'scrolled-doc', spread: 'none', offset: 0, allowScriptedContent: false, allowPopups: false });
           renditionRef.current = rendition;
+          rendition.on('resized',()=>{const release=resourcesRef.current?.hold();resizingEpub.current++;setTimeout(()=>{if(cancelled){resizingEpub.current=Math.max(0,resizingEpub.current-1);release?.();return;}void rendition.q.enqueue(()=>{}).finally(()=>{resizingEpub.current=Math.max(0,resizingEpub.current-1);release?.();});},0);});
           rendition.hooks.content.register((contents: any) => {
             contents.document.addEventListener('wheel', (event:WheelEvent)=>{
               pauseManually();if(event.deltaY>=0)return;
@@ -241,27 +282,45 @@ export default function Reader({ book, settings, narration, windowState, onClose
           });
           rendition.on('relocated', (location: any) => {
             if (cancelled || !location?.start?.cfi) return;
+            if(latest.current.windowState!=='visible'&&deferredSpeechPosition.current)return;
+            if((resizingEpub.current||resizeSettling.current)&&!navigationTarget.current)return;
             const target=navigationTarget.current;
             if(target){const wanted=epubBook.spine.get(target);if(wanted&&wanted.index!==location.start.index)return;}
             locationRef.current = location;
+            if(epubHost.current)epubHost.current.dataset.lastLocation=location.start.cfi;
             const total = Math.max(1, epubBook.spine.length || epubBook.spine.spineItems.length);
             const sectionProgress = Math.max(0, (location.start.displayed?.page || 1) - 1) / Math.max(1, location.start.displayed?.total || 1);
             const progress = location.atEnd ? 100 : ((location.start.index + sectionProgress) / total) * 100;
             publishProgress(location.start.cfi, progress);
+            if(epubHost.current&&!navigationTarget.current)anchorRef.current=captureEpubAnchor(epubHost.current,rendition,location.start.cfi);
+            resourcesRef.current?.trim();
             if (location.atEnd) setRunning(false);
           });
           rendition.on('displayError', fail);
           applyEpubTheme();
+          appliedAppearance.current=appearanceKey(latest.current.settings);
           try { await rendition.display(initialProgress?.position || undefined); }
           catch { await rendition.display(); if (!cancelled) setNotice('原来的阅读位置不可用，已返回书籍开头。'); }
+          anchorScroller=epubHost.current?.querySelector<HTMLElement>('.epub-container')||null;
+          anchorScroll=()=>{if(!cancelled&&!resizingEpub.current&&!resizeSettling.current&&!navigationTarget.current&&latest.current.windowState==='visible'&&epubHost.current&&progressRef.current)anchorRef.current=captureEpubAnchor(epubHost.current,rendition,progressRef.current.position);};
+          anchorScroller?.addEventListener('scroll',anchorScroll,{passive:true});
+          captureResize=()=>{if(!resizeSnapshot.current)resizeSnapshot.current=anchorRef.current;resizeSettling.current=true;};
+          window.addEventListener('resize',captureResize,true);
           if(!cancelled&&epubHost.current){
             let width=Math.floor(epubHost.current.clientWidth),height=Math.floor(epubHost.current.clientHeight);
             epubResize=new ResizeObserver(()=>{
               clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{
                 const host=epubHost.current;if(cancelled||!host)return;
+                if(latest.current.windowState!=='visible')return;
                 const w=Math.floor(host.clientWidth),h=Math.floor(host.clientHeight);
                 if(w<100||h<100||(w===width&&h===height))return;width=w;height=h;
-                rendition.resize(w,h,navigationTarget.current||progressRef.current?.position);
+                const anchor=resizeSnapshot.current||anchorRef.current,intent=readingIntent.current;
+                resizeSettling.current=true;
+                host.dataset.lastResizeTarget=navigationTarget.current||anchor?.position||progressRef.current?.position||'';
+                const explicit=navigationTarget.current;
+                rendition.resize(w,h,navigationTarget.current||anchor?.position||progressRef.current?.position);
+                const finish=()=>{clearTimeout(settleTimer);settleTimer=setTimeout(()=>{resizeSettling.current=false;resizeSnapshot.current=null;anchorScroll?.();},180);};
+                if(anchor&&!explicit)void moveReadingPosition(anchor.position).then(()=>{if(!cancelled&&intent===readingIntent.current&&epubHost.current)alignEpubAnchor(epubHost.current,rendition,anchor);}).catch(()=>{}).finally(finish);else finish();
               },90);
             });epubResize.observe(epubHost.current);
           }
@@ -274,6 +333,9 @@ export default function Reader({ book, settings, narration, windowState, onClose
       cancelled = true; searchSerial.current++;navigationSerial.current++;navigationTarget.current=null;deferredSpeechPosition.current=null;previousLoad.current=null; clearTimeout(timeoutId);clearTimeout(resizeTimer);epubResize?.disconnect();
       void flushProgress(id);
       currentWorker?.terminate();
+      if(anchorScroller&&anchorScroll)anchorScroller.removeEventListener('scroll',anchorScroll);
+      if(captureResize)window.removeEventListener('resize',captureResize,true);clearTimeout(settleTimer);resizeSnapshot.current=null;resizeSettling.current=false;
+      indexRef.current?.dispose();indexRef.current=null;resourcesRef.current?.dispose();resourcesRef.current=null;anchorRef.current=null;
       if (workerRef.current === currentWorker) workerRef.current = null;
       try { rendition?.destroy(); epubBook?.destroy(); } catch { /* A partially parsed EPUB may have no manager yet. */ }
       if (renditionRef.current === rendition) renditionRef.current = null;
@@ -293,13 +355,16 @@ export default function Reader({ book, settings, narration, windowState, onClose
 
   useEffect(() => {
     if (loading) return;
-    if (book.type === 'txt') restoreTextPosition(progressRef.current?.position || 'txt:0:0', true);
+    const key=appearanceKey(settings);if(appliedAppearance.current===key)return;appliedAppearance.current=key;
+    if (book.type === 'txt') restoreTextAnchor();
     else {
-      const cfi = progressRef.current?.position;
+      const anchor=epubHost.current&&!resizingEpub.current&&progressRef.current?captureEpubAnchor(epubHost.current,renditionRef.current,progressRef.current.position):anchorRef.current,cfi = anchor?.position||progressRef.current?.position;
+      if(anchor)anchorRef.current=anchor;
       applyEpubTheme();
-      if (cfi) requestAnimationFrame(() => renditionRef.current?.display(cfi).catch(() => {}));
+      const intent=readingIntent.current;
+      if (cfi) requestAnimationFrame(() => {if(intent!==readingIntent.current)return;void moveReadingPosition(cfi).then(()=>{if(intent===readingIntent.current&&anchor&&epubHost.current&&renditionRef.current)requestAnimationFrame(()=>{if(intent===readingIntent.current)alignEpubAnchor(epubHost.current!,renditionRef.current,anchor);});}).catch(()=>{});});
     }
-  }, [settings.fontSize, settings.lineHeight, settings.readerWidth, settings.readerTheme, loading, book.type, applyEpubTheme, restoreTextPosition]);
+  }, [settings.fontSize, settings.lineHeight, settings.readerWidth, settings.readerTheme, loading, book.type, applyEpubTheme, restoreTextAnchor]);
 
   useEffect(() => {
     const element = viewport.current;
@@ -309,6 +374,8 @@ export default function Reader({ book, settings, narration, windowState, onClose
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
+        if(textAligning.current||textRestoring.current.busy)return;
+        textAnchor.current=captureTextAnchor(element)||textAnchor.current;
         const top = element.scrollTop;
         const items = virtualizerRef.current.getVirtualItems();
         const item = items.find(candidate => candidate.end > top) || items[0];
@@ -323,16 +390,17 @@ export default function Reader({ book, settings, narration, windowState, onClose
     const resize = new ResizeObserver(() => {
       if (Math.abs(width - element.clientWidth) < 2) return;
       width = element.clientWidth;
-      restoreTextPosition(progressRef.current?.position || 'txt:0:0', true);
+      restoreTextAnchor();
     });
     resize.observe(element);
-    return () => { element.removeEventListener('scroll', update); resize.disconnect(); cancelAnimationFrame(frame); };
-  }, [text, publishProgress, restoreTextPosition]);
+    return () => { element.removeEventListener('scroll', update); resize.disconnect(); cancelAnimationFrame(frame);textAnchor.current=null;textAligning.current++;textRestoring.current.serial++;textRestoring.current.busy=false; };
+  }, [text, publishProgress, restoreTextAnchor]);
 
   useEffect(() => {
     const timer = setInterval(() => void flushProgress(), 1800);
     return () => clearInterval(timer);
   }, [flushProgress]);
+  useEffect(()=>{const flush=(event:Event)=>{void flushProgress().finally(()=>{const done=(event as CustomEvent).detail;if(typeof done==='function')done();});};window.addEventListener('moyu:flush-progress',flush);return()=>window.removeEventListener('moyu:flush-progress',flush);},[flushProgress]);
 
   useEffect(() => {
     const previous = previousState.current;
@@ -343,7 +411,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
     } else if (previous === 'autoHidden' && autoResume.current) {
       autoResume.current = false; setRunning(true);
     }
-    if(windowState==='visible'&&deferredSpeechPosition.current)void moveReadingPosition(deferredSpeechPosition.current).catch(()=>setNotice('朗读位置暂未显示，请通过目录重新定位。'));
+    if(windowState==='visible'&&deferredSpeechPosition.current){const position=deferredSpeechPosition.current;if(epubHost.current&&renditionRef.current)renditionRef.current.resize(epubHost.current.clientWidth,epubHost.current.clientHeight,position);void moveReadingPosition(position).catch(()=>setNotice('朗读位置暂未显示，请通过目录重新定位。'));}
     previousState.current = windowState;
   }, [windowState, flushProgress,moveReadingPosition]);
 
@@ -380,6 +448,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
   useEffect(() => {
     const serial = ++searchSerial.current;
     setHits([]); setSearchCount(0);
+    if(panel!=='search'){indexRef.current?.cancelSearch();setSearching(false);return;}
     if (!query.trim()) { setSearching(false); return; }
     setSearching(true);
     const timer = setTimeout(async () => {
@@ -387,25 +456,16 @@ export default function Reader({ book, settings, narration, windowState, onClose
       else {
         const currentBook = epubRef.current;
         if (!currentBook) { setSearching(false); return; }
-        const found: SearchHit[] = [];
-        let count = 0;
         try {
-          for (const section of currentBook.spine.spineItems) {
-            if (searchSerial.current !== serial) return;
-            const alreadyLoaded = !!section.document;
-            await section.load(currentBook.load.bind(currentBook));
-            const results = section.find(query.trim());
-            count += results.length;
-            for (const result of results) if (found.length < 200) found.push({ label: result.excerpt, position: result.cfi });
-            if (!alreadyLoaded) section.unload();
-            await new Promise(resolve => setTimeout(resolve, 0));
-          }
-          if (searchSerial.current === serial) { setHits(found); setSearchCount(count); setSearching(false); }
-        } catch { if (searchSerial.current === serial) { setSearching(false); setNotice('部分章节无法搜索，请通过目录继续阅读。'); } }
+          if(!resourcesRef.current)return;
+          const index=indexRef.current??=new EpubSearchIndex(book.id,currentBook,resourcesRef.current,progress=>{if(mounted.current){setIndexProgress(progress);if(epubHost.current){epubHost.current.dataset.indexSections=String(progress.sections);epubHost.current.dataset.indexCached=String(progress.cached);}}});
+          const results=await index.search(query.trim(),serial);
+          if (searchSerial.current === serial) { setHits(results.matches); setSearchCount(results.count); setSearching(false); }
+        } catch(failure) { if (searchSerial.current === serial) { setSearching(false);if(errorMessage(failure)!=='cancelled')setNotice('全文搜索失败：'+errorMessage(failure)); } }
       }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [query, book.type]);
+    return () => {clearTimeout(timer);indexRef.current?.cancelSearch();};
+  }, [query, book.type,panel]);
 
   const togglePanel = (next: Exclude<Panel, null>) => { pauseManually(); setPanel(current => current === next ? null : next); };
   const saveBookmarks = async (next: Bookmark[]) => {
@@ -438,9 +498,9 @@ export default function Reader({ book, settings, narration, windowState, onClose
       <button className="reader-icon" title="返回书架" onClick={() => { pauseManually(); void flushProgress(); onClose(); }}><ArrowLeft size={18} /></button>
       <div className="reader-title"><span>{book.title}</span><small>{book.type.toUpperCase()} · {loading ? '正在准备' : `${percent.toFixed(1)}%`}</small></div>
       <div className="reader-tools">
-        <button className={`reader-icon ${panel === 'contents' ? 'is-active' : ''}`} title="目录" onClick={() => togglePanel('contents')}><List size={18} /></button>
-        <button className={`reader-icon ${panel === 'search' ? 'is-active' : ''}`} title="搜索全文" onClick={() => togglePanel('search')}><Search size={17} /></button>
-        <button className={`reader-icon ${panel === 'bookmarks' ? 'is-active' : ''}`} title="我的书签" onClick={() => togglePanel('bookmarks')}><BookmarkIcon size={17} /></button>
+        <button disabled={loading||!!error} className={`reader-icon ${panel === 'contents' ? 'is-active' : ''}`} title="目录" onClick={() => togglePanel('contents')}><List size={18} /></button>
+        <button disabled={loading||!!error} className={`reader-icon ${panel === 'search' ? 'is-active' : ''}`} title="搜索全文" onClick={() => togglePanel('search')}><Search size={17} /></button>
+        <button disabled={loading||!!error} className={`reader-icon ${panel === 'bookmarks' ? 'is-active' : ''}`} title="我的书签" onClick={() => togglePanel('bookmarks')}><BookmarkIcon size={17} /></button>
         <button className={`reader-icon ${panel === 'appearance' ? 'is-active' : ''}`} title="阅读设置" onClick={() => togglePanel('appearance')}><Settings2 size={18} /></button>
         <button className={`reader-icon ${panel === 'narration' ? 'is-active' : ''}`} title="朗读设置" onClick={() => togglePanel('narration')}><Headphones size={18} /></button>
       </div>
@@ -449,7 +509,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
       {panel && <aside className="reader-panel" aria-label="阅读工具">
         <div className="reader-panel-heading"><strong>{{ contents: '章节目录', search: '寻找一句话', bookmarks: '我的书签', appearance: '舒适地阅读',narration:'听一段故事' }[panel]}</strong><button className="reader-icon" title="关闭面板" onClick={() => setPanel(null)}><X size={16} /></button></div>
         {panel === 'contents' && <div className="reader-panel-list">{chapters.map((chapter, index) => <button key={`${chapter.position}-${index}`} className="reader-list-item" style={{ paddingLeft: 14 + (chapter.depth || 0) * 12 }} onClick={() => {setPanel(null);goTo(chapter.position);}}><span className="reader-list-number">{String(index + 1).padStart(2, '0')}</span><span>{chapter.label}</span></button>)}{!chapters.length && <p className="reader-empty">这本书没有章节目录。</p>}</div>}
-        {panel === 'search' && <><label className="reader-search"><Search size={16} /><input autoFocus placeholder="搜索书中的文字" value={query} onChange={event => setQuery(event.target.value)} /></label><p className="reader-panel-hint">{searching ? '正在寻找…' : query ? `找到 ${searchCount} 处${searchCount > 200 ? '，显示前 200 处' : ''}` : '输入关键词，继续那段故事。'}</p><div className="reader-panel-list">{hits.map((hit, index) => <button key={`${hit.position}-${index}`} className="reader-list-item reader-search-hit" onClick={() => goTo(hit.position)}>{hit.label}</button>)}</div></>}
+        {panel === 'search' && <><label className="reader-search"><Search size={16} /><input autoFocus maxLength={128} placeholder="搜索书中的文字" value={query} onChange={event => setQuery(event.target.value)} /></label><p className="reader-panel-hint">{searching ? indexProgress && !indexProgress.cached ? '正在建立全文索引 '+indexProgress.sections+'/'+indexProgress.total+'…' : '正在寻找…' : query ? `找到 ${searchCount} 处${searchCount > 200 ? '，显示前 200 处' : ''}` : '输入关键词，继续那段故事。'}</p><div className="reader-panel-list">{hits.map((hit, index) => <button key={`${hit.position}-${index}`} className="reader-list-item reader-search-hit" onClick={() => goTo(hit.position)}>{hit.label}</button>)}</div></>}
         {panel === 'bookmarks' && <><button className="reader-add-mark" onClick={addBookmark}><BookmarkIcon size={15} /> 收藏当前位置</button><div className="reader-panel-list">{bookmarks.map(mark => <div className="reader-bookmark" key={mark.id}><button onClick={() => goTo(mark.position)}><span>{mark.label}</span><small>{(mark.percent * 100).toFixed(1)}%</small></button><button className="reader-icon" title="删除书签" onClick={() => void saveBookmarks(bookmarks.filter(item => item.id !== mark.id))}><Trash2 size={14} /></button></div>)}{!bookmarks.length && <p className="reader-empty">喜欢的段落，留在这里。</p>}</div></>}
         {panel === 'appearance' && <div className="reader-appearance">
           <label><span>字号 <b>{settings.fontSize}px</b></span><input type="range" min="14" max="32" step="1" value={settings.fontSize} onChange={event => updateAppearance({ fontSize: Number(event.target.value) })} /></label>
@@ -465,6 +525,9 @@ export default function Reader({ book, settings, narration, windowState, onClose
           <label className="reader-encoding"><span>朗读语音</span><select aria-label="朗读语音" value={settings.narrationVoice} onChange={event=>void onSettingsChange({narrationVoice:event.target.value})}><option value="">自动选择中文语音</option>{narration.voices.map(item=><option key={item.name} value={item.name}>{item.name.replace(/^Microsoft /,'')} · {item.language}</option>)}</select></label>
           <label><span>语速 <b>{settings.narrationRate===0?'标准':`${settings.narrationRate>0?'快':'慢'} ${Math.abs(settings.narrationRate)} 档`}</b></span><input aria-label="朗读语速" type="range" min="-5" max="5" step="1" value={settings.narrationRate} onChange={event=>void onSettingsChange({narrationRate:Number(event.target.value)})}/></label>
           <label className="reader-check"><input type="checkbox" checked={settings.narrationContinueHidden} onChange={event=>void onSettingsChange({narrationContinueHidden:event.target.checked})}/><span>隐藏后继续朗读</span></label>
+          <label className="reader-encoding"><span>定时停止</span><select aria-label="听书定时停止" value={settings.narrationSleepMinutes} onChange={event=>void onSettingsChange({narrationSleepMinutes:Number(event.target.value)})}>{[0,5,10,15,30,45,60,90,120].map(n=><option key={n} value={n}>{n?`${n} 分钟后停止`:'不限时'}</option>)}</select></label>
+          <label className="reader-check"><input type="checkbox" checked={settings.narrationStopAtChapter} onChange={event=>void onSettingsChange({narrationStopAtChapter:event.target.checked})}/><span>本章结束后停止</span></label>
+          <p className="reader-panel-hint">定时按实际经过时间计算，隐藏时也有效；更改分钟数会从现在重新计时。回听保留最近 64 句。</p>
           <p className="reader-panel-hint">默认隐藏时暂停，恢复后继续。开启后，鼠标移出、快捷隐藏或最小化时仍可听书；返回待办、锁屏和退出会停止。</p>
           <div className="reader-speech-actions"><button disabled={loading||!!error||!narration.voices.length} onClick={voice.toggle}>{['preparing','speaking'].includes(voice.status)?'暂停朗读':voice.status==='paused'?'继续朗读':'开始朗读'}</button><button disabled={!voice.active&&!voice.preparing} onClick={voice.stop}><Square size={13}/>停止</button></div>
           <p className="reader-voice-status" role="status">{voice.preparing?'正在准备段落…':voice.error||voice.message||({idle:'准备好后，让文字读给你听。',preparing:'正在启动本机语音…',speaking:'正在朗读，阅读位置随段落前进。',paused:'朗读已暂停。',finished:'正在衔接下一段…',error:'语音暂不可用。'}[voice.status])}</p>
@@ -483,6 +546,7 @@ export default function Reader({ book, settings, narration, windowState, onClose
       </div>
     </div>
     {(notice||voice.error||voice.message) && <div className="reader-notice" role="status"><span>{notice||voice.error||voice.message}</span><button className="reader-icon" title="关闭提示" onClick={() => {setNotice('');voice.dismiss();if(voice.error)voice.stop();}}><X size={14} /></button></div>}
+    {voice.currentSentence&&voice.hasSession&&<div className="reader-current-sentence" role="status"><button title="朗读上一句" onClick={()=>voice.seek(-1)}><ChevronLeft size={15}/></button><span><b>{voice.currentSentence.text.slice(0,narration.character)}</b>{voice.currentSentence.text.slice(narration.character)}</span><button title="朗读下一句" onClick={()=>voice.seek(1)}><ChevronRight size={15}/></button>{!!narration.sleepUntil&&<small>定时至 {new Date(narration.sleepUntil).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small>}</div>}
     <footer className="reader-footer">
       <button className="reader-icon" title="上一章 / 上一页" disabled={loading || !!error} onClick={() => jumpChapter(-1)}><ChevronLeft size={17} /></button>
       <div className="reader-progress"><div><i style={{ width: `${percent}%` }} /></div><span>{percent.toFixed(1)}% <span className="reader-progress-caption">· 给自己一点慢下来的时间</span></span></div>

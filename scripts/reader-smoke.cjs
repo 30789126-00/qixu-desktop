@@ -37,14 +37,14 @@ async function main(){
     for(const title of ['large-20mb-gb18030','long-paragraph']){if(!(await api('getState')).books.some(b=>b.title===title))continue;await open(title);assert.ok(await page.locator('.reader-paragraph').count()<80);assert.ok((await page.locator('.reader-text-scroll').innerText()).length>20);await back();}
   });
   await step('EPUB 连续阅读、目录、搜索、书签和自动滚动',async()=>{
-    const start=Date.now();await open('sample');const firstPaintMs=Date.now()-start;
+    const start=Date.now();await open('清风经过 · 3章测试书');const firstPaintMs=Date.now()-start;
     assert.ok(await page.locator('.reader-epub-host iframe').count()>0);
     await page.getByTitle('目录',{exact:true}).click();assert.equal(await page.locator('.reader-list-item').count(),3);await page.locator('.reader-list-item').nth(1).click();
     await page.getByTitle('搜索全文',{exact:true}).click();await page.locator('.reader-search input').fill('午后的光');await page.waitForFunction(()=>document.querySelector('.reader-panel-hint')?.textContent.includes('找到'),null,{timeout:15000});assert.ok(await page.locator('.reader-search-hit').count()>0);await page.getByTitle('关闭面板',{exact:true}).click();
     await page.getByTitle('我的书签',{exact:true}).click();await page.locator('.reader-add-mark').click();assert.equal(await page.locator('.reader-bookmark').count(),1);await page.getByTitle('关闭面板',{exact:true}).click();
     await page.locator('.reader-auto').click();await page.waitForTimeout(1200);const top=await page.locator('.epub-container').evaluate(el=>el.scrollTop);assert.ok(top>0);await page.locator('.reader-auto').click();await page.screenshot({path:path.join(runDir,'reader-epub.png')});await back();return {firstPaintMs,scrollTop:top};
   });
-  await step('360章 EPUB 首屏和目录完整',async()=>{const start=Date.now();await open('hundreds-chapters');const firstPaintMs=Date.now()-start;await page.getByTitle('目录',{exact:true}).click();assert.equal(await page.locator('.reader-list-item').count(),360);await page.getByTitle('关闭面板',{exact:true}).click();await back();return {firstPaintMs};});
+  await step('360章 EPUB 首屏和目录完整',async()=>{const start=Date.now();await open('清风经过 · 360章测试书');const firstPaintMs=Date.now()-start;await page.getByTitle('目录',{exact:true}).click();assert.equal(await page.locator('.reader-list-item').count(),360);await page.getByTitle('关闭面板',{exact:true}).click();await back();return {firstPaintMs};});
   await step('窄窗口布局和深色设置',async()=>{await api('setSection','settings');await api('updateSettings',{theme:'dark'});await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(460,540));await page.waitForTimeout(200);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await page.screenshot({path:path.join(runDir,'settings-narrow.png')});});
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(app)await app.close().catch(()=>{});fs.writeFileSync(path.join(runDir,'report.json'),JSON.stringify({runDir,results,passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass).length},null,2));console.log('Report:',path.join(runDir,'report.json'));});

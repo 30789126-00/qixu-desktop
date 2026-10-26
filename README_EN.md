@@ -10,9 +10,11 @@ Qixu combines an Eisenhower Matrix task manager, a persistent desktop widget, a 
 - Keep a compact, colorful desktop widget with quick notes and an end-of-work countdown.
 - Browse Bilibili, YouTube, Fanqie Novel, Google and Yandex in a tabbed Electron window.
 - Use adjustable window opacity, window-contained media fullscreen, mouse-leave auto-hide, pause/mute, and quick keyboard hide.
-- Import TXT or EPUB, use bookmarks, search, auto-scroll and reading-progress recovery. Version 1.8.0 adds local Windows speech narration with selectable voices, speed, and optional continued listening while hidden.
+- Import TXT or EPUB, use bookmarks, search, auto-scroll and reading-progress recovery. Version 1.9.0 adds sentence navigation, sleep timers, bounded chapter caching, reusable search indexes, and bookshelf metadata.
 - Translate supported non-Chinese webpages locally, and overlay bilingual subtitles when accessible caption tracks are available.
-- Restore recent media, reader position, window geometry and settings after restart or interruption.
+- Restore recent media, independent per-video positions, reader location, window geometry and settings after restart or interruption.
+- Schedule weekly/monthly tasks, filter by project and tags, and configure per-weekday end-of-work times.
+- Hibernate idle tabs, inspect save status, create and preview backups, and verify update installers before installation or rollback.
 
 ![Qixu widget preview](docs/images/qixu-widget.png)
 

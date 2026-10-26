@@ -1,7 +1,7 @@
 {
   "name": "qixu-desktop",
   "productName": "栖序",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "description": "栖序：今日有序，片刻从容。Windows 上的待办、阅读与影音空间。",
   "author": "Qixu",
@@ -10,7 +10,8 @@
     "build": "node scripts/prepare-native.cjs && tsc --noEmit && vite build && node scripts/build-main.mjs",
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
-    "package": "npm run build && electron-builder --win nsis --x64"
+    "package": "npm run build && electron-builder --win nsis --x64",
+    "test:matrix": "node scripts/regression-matrix.cjs"
   },
   "dependencies": {
     "@huggingface/transformers": "3.8.1",
