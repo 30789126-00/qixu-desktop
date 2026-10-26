@@ -133,6 +133,7 @@ public static class ManagedBridge {
   w.Loaded+=(s,e)=>w.Dispatcher.BeginInvoke(new Action(()=>Send("HELLO:"+Environment.GetEnvironmentVariable("QIXU_BRIDGE_NONCE"))),DispatcherPriority.ContextIdle);
  }
  static void Receive(string command) {
+  if(NativeNarration.Receive(command))return;
   if(command=="TEST_CTRL_ALT"&&Environment.GetEnvironmentVariable("QIXU_TEST")=="1"){chord=false;HandleKey(Key.LeftAlt,ModifierKeys.Control|ModifierKeys.Alt,true,false);}
   if(Environment.GetEnvironmentVariable("QIXU_TEST")=="1") {
    if(command=="TEST_GLOBAL_CTRL_ALT"){keybd_event(0x11,0,0,UIntPtr.Zero);keybd_event(0x12,0,0,UIntPtr.Zero);keybd_event(0x12,0,2,UIntPtr.Zero);keybd_event(0x11,0,2,UIntPtr.Zero);}
@@ -159,6 +160,6 @@ public static class ManagedBridge {
   Data.Folder=folder; Directory.CreateDirectory(folder);
   var app=new Application();var w=new MainWindow();
   if(Array.IndexOf(args,"--background")>=0)w.Loaded+=(s,e)=>{w.Hide();w.BridgeEnsureStartupWidget();};
-  app.Run(w);
+  try {app.Run(w);}finally{NativeNarration.Dispose();}
  }
 }

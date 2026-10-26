@@ -6,7 +6,11 @@ export interface Settings {
   readerWidth: number; readerTheme: 'light' | 'sepia' | 'dark'; scrollSpeed: number;
   autoTranslate: boolean; bilingualSubtitles: boolean; translationDisabledSites: string[];
   autoSkipYouTubeAds: boolean;
+  narrationVoice: string; narrationRate: number; narrationContinueHidden: boolean;
 }
+export interface NarrationVoice { name:string; language:string; }
+export interface NarrationState { status:'idle'|'preparing'|'speaking'|'paused'|'finished'|'error'; bookId:string|null; runId:string; segmentId:string; voices:NarrationVoice[]; error:string; character:number; }
+export interface NarrationSegment { bookId:string; runId:string; segmentId:string; text:string; }
 export interface TranslationState { model: 'idle'|'loading'|'ready'|'error'; page: string; subtitles: string; error: string; completed: number; }
 export interface Source { id: string; title: string; url: string; kind: 'video' | 'novel'; color: string; abbr: string; }
 /** percent is a fraction in [0, 1]. */
@@ -28,9 +32,11 @@ export interface ResumeState {
 }
 export interface BossKeyState { configured:boolean; shortcutConfigured:boolean; passwordRequired:boolean; }
 export interface BossKeyUpdate { shortcut:string; passwordRequired:boolean; currentPassword?:string; newPassword?:string; }
-export interface AppState { bossKeyPanel:boolean; bossKey:BossKeyState; access: 'todo'|'prompt'|'private'; todoReady: boolean; settings: Settings; sources: Source[]; books: Book[]; section: Section; activeSourceId: string | null; activeTabId: string | null; browserTabs: BrowserTab[]; browserHistory: BrowserHistoryEntry[]; browserBookmarks: BrowserBookmark[]; windowState: WindowState; fullscreen: boolean; media: MediaState; notice: string; loginMode: boolean; translation: TranslationState; resume: ResumeState; }
+export interface AppState { bossKeyPanel:boolean; bossKey:BossKeyState; access: 'todo'|'prompt'|'private'; todoReady: boolean; settings: Settings; sources: Source[]; books: Book[]; section: Section; activeSourceId: string | null; activeTabId: string | null; browserTabs: BrowserTab[]; browserHistory: BrowserHistoryEntry[]; browserBookmarks: BrowserBookmark[]; windowState: WindowState; fullscreen: boolean; media: MediaState; notice: string; loginMode: boolean; translation: TranslationState; narration:NarrationState; resume: ResumeState; }
 export interface Rect { x: number; y: number; width: number; height: number; }
 export interface AppAPI {
+  speakBook(segment:NarrationSegment):Promise<void>;
+  narrationAction(action:'pause'|'resume'|'stop',runId?:string):Promise<void>;
   updateBossKey(patch:BossKeyUpdate):Promise<AppState>;
   submitPassword(password: string): Promise<boolean>;
   cancelUnlock(): Promise<void>;

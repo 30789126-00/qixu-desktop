@@ -48,6 +48,7 @@ function PrivateSpace() {
   const [sidebarOpen,setSidebarOpen]=useState(false);
   const [videoTab,setVideoTab]=useState<'home'|'content'>('home');
   const videoTabInitialized=useRef(false);
+  const readerRestored=useRef(false);
   const [findOpen,setFindOpen]=useState(false);
   const [findQuery,setFindQuery]=useState('');
   const [browserPanel,setBrowserPanel]=useState<'history'|'bookmarks'|null>(null);
@@ -81,9 +82,11 @@ function PrivateSpace() {
   }, [state?.notice, notify]);
   useEffect(() => { setAddress(state?.media.url || ''); }, [state?.media.url]);
   useEffect(() => {
-    if (!state || state.section !== 'library' || !state.resume.activeBookId) return;
+    if (!state || readerRestored.current) return;
+    readerRestored.current=true;
+    if (state.section !== 'library' || !state.resume.activeBookId) return;
     if (state.books.some(item => item.id === state.resume.activeBookId)) setSelectedBookId(current => current || state.resume.activeBookId);
-  }, [state?.section, state?.resume.activeBookId, state?.books]);
+  }, [state]);
   useEffect(() => {
     if (!state) return;
     document.documentElement.dataset.theme = state.settings.theme;
@@ -191,7 +194,7 @@ function PrivateSpace() {
         </>}
         {!fullscreen && <div className="translation-strip"><span className={state.translation.error?'translation-error':''} title={state.translation.error||state.translation.subtitles}>{state.loginMode?'登录期间已暂停自动隐藏':state.translation.error|| (state.translation.model==='loading'?'正在加载本地翻译模型…':state.translation.subtitles||'本地翻译 · 自动开启')}</span><div><button onClick={()=>void run(api.translationAction('toggleSite'))}>{state.settings.translationDisabledSites.some(site=>state.media.url.includes('://'+site+'/'))?'翻译此网站':'恢复原文'}</button><button aria-pressed={state.settings.bilingualSubtitles} onClick={()=>void updateSettings({bilingualSubtitles:!state.settings.bilingualSubtitles})}>{state.settings.bilingualSubtitles?'双语字幕：开':'双语字幕：关'}</button>{state.translation.error&&<button onClick={()=>void run(api.translationAction('retry'))}>重试</button>}</div></div>}
         <div className="web-host" ref={host}>{state.media.error && <div className="browser-error-page"><span className="error-illustration"><Globe2 size={36} strokeWidth={1.2}/></span><h2>{state.media.error.includes('访问太频繁')?'网站暂时限制了访问':'这个页面暂时没有回应'}</h2><p>{state.media.error}</p><span>{state.media.error.includes('访问太频繁')?'请先等待，不要反复扫码、发送验证码或刷新。':'检查网络连接后再试一次，或前往浏览器继续访问。'}</span><div><button className="button primary" onClick={() => void run(api.navigate('reload'))}><RotateCw size={14}/>重新加载</button><button className="button secondary" onClick={() => void run(api.openExternal())}><ExternalLink size={14}/>在浏览器中打开</button></div></div>}</div>
-      </section> : reading && book ? <div className="reader-mount"><Reader book={book} settings={state.settings} windowState={state.windowState} onClose={closeBook} onSettingsChange={updateSettings}/></div> : state.section === 'library' ?
+      </section> : reading && book ? <div className="reader-mount"><Reader book={book} settings={state.settings} narration={state.narration} windowState={state.windowState} onClose={closeBook} onSettingsChange={updateSettings}/></div> : state.section === 'library' ?
         <LibraryPage books={state.books} sources={state.sources} busy={busy} onImport={() => void importBooks()} onOpen={openBook} onDelete={setDeleteBook} onSource={openSource}/> : state.section === 'settings' ?
         <SettingsPage state={state} update={updateSettings} run={run} onAdd={() => setSourceEditor(true)}/> :
         <VideoHome sources={state.sources} onOpen={openSource} onAdd={() => setSourceEditor(true)} autoHide={state.settings.autoHide}/>}
@@ -239,7 +242,7 @@ function SettingsPage({ state, update, run, onAdd }: { state: AppState; update: 
     <h2 className="settings-section-title">播放体验</h2><div className="settings-card"><Row title="YouTube 自动跳过广告" description="出现可用的跳过按钮时自动点击；不可跳过的广告正常播放"><Toggle label="YouTube 自动跳过广告" checked={settings.autoSkipYouTubeAds} onChange={value=>void update({autoSkipYouTubeAds:value})}/></Row></div><h2 className="settings-section-title">语言与字幕</h2><div className="settings-card"><Row title="自动翻译外文网页" description="译文显示在原文下方；恢复原文会记住当前网站"><Toggle label="自动翻译外文网页" checked={settings.autoTranslate} onChange={value=>void update({autoTranslate:value})}/></Row><Row title="自动开启中英双语字幕" description="使用网站已有字幕，包括自动生成字幕；支持播放器全屏"><Toggle label="自动开启中英双语字幕" checked={settings.bilingualSubtitles} onChange={value=>void update({bilingualSubtitles:value})}/></Row><Row title="免费本地翻译" description={state.translation.model==='loading'?'模型加载中':state.translation.model==='ready'?'模型已就绪 · 文本仅在本机处理':'随安装包提供语言模型，无需 API 密钥'}><span className="subtle-badge">离线运行</span></Row>{settings.translationDisabledSites.length>0&&<Row title="不自动翻译的网站"><div className="translation-exceptions">{settings.translationDisabledSites.map(site=><button key={site} title="点击恢复自动翻译" onClick={()=>void update({translationDisabledSites:settings.translationDisabledSites.filter(s=>s!==site)})}>{site} ×</button>)}</div></Row>}</div>
     <h2 className="settings-section-title">阅读偏好</h2><div className="settings-card"><Row title="阅读主题"><div className="reader-theme-picker">{[['light', '白昼'], ['sepia', '暖纸'], ['dark', '夜读']].map(([value, label]) => <button key={value} className={`${value} ${settings.readerTheme === value ? 'selected' : ''}`} onClick={() => void update({ readerTheme: value as Settings['readerTheme'] })}>{label}</button>)}</div></Row><Row title="文字大小"><div className="range-control"><input aria-label="文字大小" type="range" min="14" max="36" value={settings.fontSize} onChange={event => void update({ fontSize: Number(event.target.value) })}/><span>{settings.fontSize}px</span></div></Row><Row title="行间距"><div className="range-control"><input aria-label="行间距" type="range" min="1.4" max="2.6" step="0.1" value={settings.lineHeight} onChange={event => void update({ lineHeight: Number(event.target.value) })}/><span>{settings.lineHeight.toFixed(1)}</span></div></Row><Row title="阅读宽度"><div className="range-control"><input aria-label="阅读宽度" type="range" min="360" max="1000" step="20" value={settings.readerWidth} onChange={event => void update({ readerWidth: Number(event.target.value) })}/><span>{settings.readerWidth}px</span></div></Row><Row title="自动滚动速度" description="阅读时可随时暂停、继续"><div className="range-control"><input aria-label="自动滚动速度" type="range" min="5" max="100" value={settings.scrollSpeed} onChange={event => void update({ scrollSpeed: Number(event.target.value) })}/><span>{settings.scrollSpeed} px/s</span></div></Row></div>
     <div className="settings-source-heading"><h2 className="settings-section-title">我的内容来源</h2><button className="text-button" onClick={onAdd}><Plus size={14}/>添加网站</button></div><div className="settings-card source-settings">{state.sources.map((source, index) => <div className="managed-source" key={source.id}><SourceIcon source={source}/><div><strong>{source.title}<span>{source.kind === 'novel' ? '小说' : '视频'}</span></strong><p>{source.url}</p></div><div className="source-actions"><IconButton label={`上移 ${source.title}`} disabled={!index} onClick={() => moveSource(index, -1)}><ArrowUp size={14}/></IconButton><IconButton label={`下移 ${source.title}`} disabled={index === state.sources.length - 1} onClick={() => moveSource(index, 1)}><ArrowDown size={14}/></IconButton><IconButton label={`删除来源 ${source.title}`} disabled={source.id==='aikan'} onClick={() => void run(api.saveSources(state.sources.filter(item => item.id !== source.id)))}><Trash2 size={14}/></IconButton></div></div>)}</div>
-    <div className="about-app"><Mark small/><div><strong>栖序 <span>1.7.7</span></strong><p>安静地，留一点时间给自己。</p></div><span>MADE FOR YOUR LITTLE BREAKS</span></div>
+    <div className="about-app"><Mark small/><div><strong>栖序 <span>1.8.0</span></strong><p>安静地，留一点时间给自己。</p></div><span>MADE FOR YOUR LITTLE BREAKS</span></div>
   </main>;
 }
 

@@ -34,6 +34,6 @@ const version=require('../package.json').version+'.0';
 fs.writeFileSync(path.join(src,'AssemblyInfo.cs'),`using System.Reflection;\n[assembly:AssemblyTitle("栖序")]\n[assembly:AssemblyProduct("栖序")]\n[assembly:AssemblyVersion("${version}")]\n[assembly:AssemblyFileVersion("${version}")]\n`);
 fs.copyFileSync(path.join(root,'assets/icon.ico'),path.join(out,'icon.ico'));
 const fx='C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319';
-const args=['/nologo','/target:winexe','/out:'+path.join(out,'TodoHost.exe'),'/win32icon:'+path.join(out,'icon.ico'),...['PresentationFramework','PresentationCore','WindowsBase'].map(n=>'/reference:'+path.join(fx,'WPF',n+'.dll')),'/reference:System.Xaml.dll','/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll',path.join(src,'Todo.Managed.cs'),path.join(src,'Bridge.cs'),path.join(src,'AssemblyInfo.cs')];
+const args=['/nologo','/target:winexe','/out:'+path.join(out,'TodoHost.exe'),'/win32icon:'+path.join(out,'icon.ico'),...['PresentationFramework','PresentationCore','WindowsBase'].map(n=>'/reference:'+path.join(fx,'WPF',n+'.dll')),'/reference:System.Xaml.dll','/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll','/reference:'+path.join(fx,'WPF','System.Speech.dll'),path.join(src,'Todo.Managed.cs'),path.join(src,'Bridge.cs'),path.join(src,'Narration.cs'),path.join(src,'AssemblyInfo.cs')];
 const result=spawnSync(path.join(fx,'csc.exe'),args,{stdio:'inherit'});if(result.status!==0)process.exit(result.status||1);
 console.log('Native task workspace built.');

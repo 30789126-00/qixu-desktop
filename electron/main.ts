@@ -17,6 +17,7 @@ import { TranslationService } from './translation-service';
 import { BrowserTranslator } from './translation-browser';
 import { attachYouTubeCaptions } from './youtube-captions';
 import { YouTubeAdSkipper } from './youtube-ads';
+import { emptyNarration, NarrationService } from './narration';
 import { SITE_COOLDOWN_MS, sanitizeCooldowns, cooldownMessage } from './site-cooldown';
 import {isLoginPopup,isVideoLink} from './navigation';
 import { emptyResumeState, sanitizeResumeState, checkpoint, type SessionCheckpoint } from './recovery';
@@ -29,7 +30,7 @@ const dataDir = process.env.MOYU_DATA_DIR || path.join(app.getPath('appData'), '
 app.setPath('userData', dataDir);
 app.setAppUserModelId('com.moyu.desktop');
 const state: AppState = { bossKeyPanel:false, bossKey:{configured:false,shortcutConfigured:false,passwordRequired:true}, access:'todo', todoReady:false, settings: defaultSettings, sources: defaultSources, books: [], section:'video', activeSourceId:null, activeTabId:null, browserTabs:[], browserHistory:[], browserBookmarks:[], windowState:'visible', fullscreen:false,
-  media:{ url:'', title:'', loading:false, error:'', playing:null, muted:false, status:'' }, notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},resume:{...emptyResumeState} };
+  media:{ url:'', title:'', loading:false, error:'', playing:null, muted:false, status:'' }, notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},narration:emptyNarration(),resume:{...emptyResumeState} };
 let windowMode:WindowMode='todo';
 let win: BrowserWindow;
 let tray: Tray;
@@ -79,14 +80,15 @@ const homeFile = path.join(__dirname,'../dist/index.html');
 const homeUrl = pathToFileURL(homeFile).href;
 
 function syncMode(){const fields=modeFields(windowMode);state.access=fields.access;state.windowState=fields.windowState;}
-function transition(event:WindowEvent){windowMode=transitionWindowMode(windowMode,event);syncMode();}
-function updateResume(patch:Partial<ResumeState>,immediate=false){state.resume={...state.resume,...patch,recoveredAfterCrash:state.resume.recoveredAfterCrash};persist(immediate);checkpointSession(false,immediate);}
+function transition(event:WindowEvent){windowMode=transitionWindowMode(windowMode,event);syncMode();narrator.sync();}
+function updateResume(patch:Partial<ResumeState>,immediate=false){state.resume={...state.resume,...patch,recoveredAfterCrash:state.resume.recoveredAfterCrash};narrator.sync();persist(immediate);checkpointSession(false,immediate);}
 function checkpointSession(cleanExit=false,immediate=false){
   clearTimeout(checkpointTimer);
   const write=()=>{const snapshot=checkpoint(state.resume,cleanExit);checkpointQueue=checkpointQueue.then(()=>saveDurableState(sessionPath,snapshot)).catch(()=>{});};
   if(immediate)write();else checkpointTimer=setTimeout(write,700);
 }
 const todoHost=new TodoHost(command=>{
+  if(narrator.receive(command))return;
   if(command==='UNLOCK'&&(!bossKeyConfig.configured||bossKeyConfig.legacyCtrlAlt||state.settings.shortcut==='Ctrl+Alt'))togglePrivate();
   else if(command==='HOTKEY_FAILED'){notice('Ctrl+Alt 全局监听未能启动，请使用托盘打开待办。');todoHost.send('STATUS:'+state.notice);}
   else if(command==='SHOW_TODO')showTodo();
@@ -106,6 +108,7 @@ const isTabBlocked=(tabId:string)=>isBlocked()||activeTabId!==tabId;
 const translator=new TranslationService(app.isPackaged?path.join(process.resourcesPath,'models'):path.join(__dirname,'../models'),(model,error)=>{state.translation.model=model;if(error)state.translation.error=error;emit();});
 const browserTranslator=new BrowserTranslator(translator,patch=>{Object.assign(state.translation,patch);emit();},()=>!isBlocked());
 const youtubeAdSkipper=new YouTubeAdSkipper();
+const narrator=new NarrationService(command=>todoHost.send(command),()=>({unlocked:state.access==='private',bookId:state.section==='library'?state.resume.activeBookId:null,visible:state.windowState==='visible',suspended:state.windowState==='suspended',continueHidden:state.settings.narrationContinueHidden,voice:state.settings.narrationVoice,rate:state.settings.narrationRate}),()=>{state.narration=narrator.state;emit();});
 const popupTranslators=new Map<BrowserWindow,BrowserTranslator>();
 function cancelBrowserTranslation(){browserTranslator.cancel();for(const controller of popupTranslators.values())controller.cancel();}
 async function flushSessions(){await Promise.allSettled([...sessionsConfigured].map(async partition=>{const s=session.fromPartition(partition);s.flushStorageData();await s.cookies.flushStore();}));}
@@ -413,7 +416,7 @@ async function updateSettings(patch:Partial<Settings>) {
     if(!app.isPackaged)throw new Error('开机自启需要使用安装后的版本');
     next.launchAtLogin=writeStartup(app,process.execPath,next.launchAtLogin);
   }
-  state.settings=next;nativeTheme.themeSource=next.theme;
+  state.settings=next;nativeTheme.themeSource=next.theme;narrator.sync();
   if(!next.autoTranslate&&!next.bilingualSubtitles){cancelBrowserTranslation();translator.stop();state.translation.model='idle';}
   if(state.access==='private'){win.setOpacity(next.opacity);win.setAlwaysOnTop(next.alwaysOnTop);}
   todoHost.send('STARTUP:'+(next.launchAtLogin?'1':'0'));
@@ -646,6 +649,8 @@ async function saveBook(id:string,patch:any){
   persist();emit();
 }
 const handlers: Record<string, (...args:any[])=>any> = {
+  speakBook:(segment:any)=>{if(!segment||typeof segment.bookId!=='string'||!state.books.some(book=>book.id===segment.bookId)||typeof segment.text!=='string')throw Error('朗读书籍无效');narrator.speak(segment);},
+  narrationAction:(action:string,runId?:string)=>{if(typeof runId!=='undefined'&&(typeof runId!=='string'||runId.length>80))throw Error('朗读会话无效');if(action==='stop')narrator.stop(runId);else if(!runId||runId===narrator.state.runId){if(action==='pause')narrator.pause();else if(action==='resume')narrator.resume();else throw Error('未知朗读操作');}},
   setLoginMode:(enabled:boolean)=>{state.loginMode=enabled===true;clearPointerTransitionTimers();graceUntil=Date.now()+1000;if(state.loginMode&&state.windowState==='autoHidden')restore();loginDiagnostic(state.loginMode?'login-mode-start':'login-mode-end');if(!state.loginMode)void flushSessions();emit();},
   translationAction:async(action:string)=>{if(action==='retry'){cancelBrowserTranslation();translator.stop();state.translation.error='';state.translation.model='idle';}else if(action==='toggleSite'&&mediaView){const host=new URL(mediaView.webContents.getURL()).hostname;const sites=state.settings.translationDisabledSites;await updateSettings({translationDisabledSites:sites.includes(host)?sites.filter(s=>s!==host):[...sites,host]});cancelBrowserTranslation();}emit();},
   getState:()=>publicState(),updateBossKey,updateSettings,submitPassword,cancelUnlock:()=>showTodo(),lockToTodo:()=>showTodo(),
@@ -655,7 +660,7 @@ const handlers: Record<string, (...args:any[])=>any> = {
   openSource,switchBrowserTab,closeBrowserTab,setBrowserTabMobile,toggleBrowserBookmark,clearBrowserHistory,findInPage,stopFindInPage,navigate,mediaAction,
   saveSources:async(sources:Source[])=>{const next=ensurePermanentSources(validateSources(sources));const validIds=new Set(next.map(source=>source.id));for(const tabId of [...tabOrder]){const tab=runtimeTabs.get(tabId);if(tab&&!validIds.has(tab.sourceId))await closeBrowserTab(tabId);}state.sources=next;persist(true);await persistQueue;emit();},
   importBooks,getBookContent:async(id:string)=>{const book=findBook(id);return new Uint8Array(await fs.readFile(path.join(libraryPath,`${book.id}.${book.type}`)));},saveBook,
-  setReaderSession:(bookId:string|null)=>{const valid=typeof bookId==='string'&&state.books.some(book=>book.id===bookId)?bookId:null;if(valid)state.section='library';updateResume({section:valid?'library':state.section,activeBookId:valid});emit();},
+  setReaderSession:(bookId:string|null)=>{const valid=typeof bookId==='string'&&state.books.some(book=>book.id===bookId)?bookId:null;if(narrator.state.bookId&&narrator.state.bookId!==valid)narrator.stop();if(valid)state.section='library';updateResume({section:valid?'library':state.section,activeBookId:valid});narrator.sync();emit();},
   deleteBook:async(id:string)=>{const book=findBook(id);await fs.unlink(path.join(libraryPath,`${book.id}.${book.type}`)).catch((err)=>{if(err.code!=='ENOENT')throw err;});state.books=state.books.filter(b=>b.id!==id);persist();emit();},
   openExternal:()=>{if(state.media.url)return shell.openExternal(safeUrl(state.media.url,testing));}
 };
@@ -681,6 +686,7 @@ async function start() {
     if(event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('请求来源无效');
     if(typeof method!=='string'||!Object.hasOwn(handlers,method))throw new Error('不支持的操作');
     if(state.access!=='private'&&!['getState','submitPassword','cancelUnlock','lockToTodo','windowAction','setViewport','updateBossKey'].includes(method)){
+      if(method==='narrationAction'&&args[0]==='stop'){narrator.stop(args[1]);return;}
       if(method==='saveBook'&&Date.now()<progressFlushUntil&&args[1]?.progress&&!args[1]?.bookmarks)return saveBook(args[0],{progress:args[1].progress});
       throw new Error('请先完成访问验证');
     }
@@ -711,7 +717,7 @@ async function start() {
   const iconFile=path.join(__dirname,'../assets/icon.png');
   let icon=nativeImage.createFromPath(iconFile);if(icon.isEmpty())icon=nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==');
   tray=new Tray(icon.resize({width:24,height:24}));tray.setToolTip('栖序 · 让生活自有次序');
-  tray.setContextMenu(Menu.buildFromTemplate([{label:'恢复影音／阅读（保留当前进度）',click:()=>{if(state.access==='private')restore();else requestUnlock();}},{label:'打开待办并锁定影音',click:()=>showTodo()},{type:'separator'},{label:'退出栖序',click:()=>{quitting=true;app.quit();}}]));tray.on('click',()=>{if(state.access==='private')restore();else showTodo();});
+  tray.setContextMenu(Menu.buildFromTemplate([{label:'恢复影音／阅读（保留当前进度）',click:()=>{if(state.access==='private')restore();else requestUnlock();}},{label:'打开待办并锁定影音',click:()=>showTodo()},{label:'暂停朗读',click:()=>narrator.pause()},{label:'停止朗读',click:()=>narrator.stop()},{type:'separator'},{label:'退出栖序',click:()=>{quitting=true;app.quit();}}]));tray.on('click',()=>{if(state.access==='private')restore();else showTodo();});
   if(!registerShortcut(state.settings.shortcut))state.notice=`快捷键 ${state.settings.shortcut} 已被占用，请在设置中修改`;
   powerMonitor.on('lock-screen',()=>showTodo('',true));powerMonitor.on('suspend',()=>showTodo('',true));
   screen.on('display-removed',()=>{rememberedBounds=visibleBounds(rememberedBounds);win.setBounds(rememberedBounds);});
@@ -749,11 +755,12 @@ async function start() {
   if(testing)EventEmitter.prototype.on.call(app,'qixu:test-native-command',(command:string)=>{if(['TEST_WINDOWS','TEST_OPEN_LIST','TEST_CLOSE_WIDGET','TEST_GLOBAL_CTRL_ALT','TEST_OPEN_BOSS_KEY','TEST_BOSS_KEY_VISIBLE'].includes(command))todoHost.send(command);});
   const nativeExe=app.isPackaged?path.join(process.resourcesPath,'native','TodoHost.exe'):path.join(__dirname,'../native/TodoHost.exe');
   await todoHost.start(nativeExe,dataDir,process.execPath,state.settings.launchAtLogin,process.argv.includes('--autostart'),testing,bossKeyConfig.shortcutConfigured);
+  todoHost.send('SPEECH_VOICES');
   state.todoReady=true;if(process.argv.includes('--boss-key-settings'))openBossKeySettings();else if(!bossKeyConfig.configured)requestUnlock();if(state.notice)todoHost.send('STATUS:'+state.notice);emit();
 }
 if(!testing&&!app.requestSingleInstanceLock())app.quit();else {
   app.on('second-instance',(_event,args)=>{if(args.includes('--quit')){quitting=true;app.quit();}else if(args.includes('--boss-key-settings'))openBossKeySettings();else if(state.access==='private')restore();else showTodo();});app.whenReady().then(()=>{if(process.argv.includes('--quit')){app.exit(0);return;}return start();}).catch(async err=>{await fs.mkdir(dataDir,{recursive:true});await fs.writeFile(path.join(dataDir,'startup-error.log'),String(err.stack||err));if(!testing)dialog.showErrorBox('栖序启动失败',String(err));app.exit(1);});
   app.on('window-all-closed',()=>{if(quitting)app.quit();});
   let cleanupStarted=false;
-  app.on('before-quit',event=>{if(cleanupStarted)return;event.preventDefault();cleanupStarted=true;quitting=true;globalShortcut.unregisterAll();++transitionVersion;translator.stop();void pauseAll().then(async()=>{persist(true);checkpointSession(true,true);await Promise.all([persistQueue,checkpointQueue,todoHost.stop(),flushSessions()]);}).finally(()=>{for(const popup of popups)if(!popup.isDestroyed())popup.destroy();for(const tab of runtimeTabs.values())if(!tab.view.webContents.isDestroyed())tab.view.webContents.close();runtimeTabs.clear();tabOrder.length=0;tray?.destroy();app.quit();});});
+  app.on('before-quit',event=>{if(cleanupStarted)return;event.preventDefault();cleanupStarted=true;quitting=true;narrator.stop();globalShortcut.unregisterAll();++transitionVersion;translator.stop();void pauseAll().then(async()=>{persist(true);checkpointSession(true,true);await Promise.all([persistQueue,checkpointQueue,todoHost.stop(),flushSessions()]);}).finally(()=>{for(const popup of popups)if(!popup.isDestroyed())popup.destroy();for(const tab of runtimeTabs.values())if(!tab.view.webContents.isDestroyed())tab.view.webContents.close();runtimeTabs.clear();tabOrder.length=0;tray?.destroy();app.quit();});});
 }

@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { AppAPI, AppState } from '../shared/types';
 const invoke = (method: string, ...args: unknown[]) => ipcRenderer.invoke('moyu:invoke', method, ...args);
 const api: AppAPI = {
+  speakBook:segment=>invoke('speakBook',segment),
+  narrationAction:(action,runId)=>invoke('narrationAction',action,runId),
   updateBossKey: patch=>invoke('updateBossKey',patch),
   submitPassword: password=>invoke('submitPassword',password),
   cancelUnlock: ()=>invoke('cancelUnlock'),
