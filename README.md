@@ -10,7 +10,7 @@
 
 [下载安装](https://github.com/30789126-00/qixu-desktop/releases/latest) · [功能说明](docs/使用说明.md) · [反馈建议](https://github.com/30789126-00/qixu-desktop/issues) · [English](README_EN.md)
 
-![Windows](https://img.shields.io/badge/Windows-10%2F11-3277b3?style=flat-square) ![Version](https://img.shields.io/badge/version-1.9.0-7a59d1?style=flat-square) ![Electron](https://img.shields.io/badge/Electron-%2B_React-%236f86ad?style=flat-square) ![Model](https://img.shields.io/badge/%E6%9C%AC%E5%9C%B0%E7%BF%BB%E8%AF%91-CPU-%239ed8ad?style=flat-square)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-3277b3?style=flat-square) ![Version](https://img.shields.io/badge/version-1.9.2-7a59d1?style=flat-square) ![Electron](https://img.shields.io/badge/Electron-%2B_React-%236f86ad?style=flat-square) ![Model](https://img.shields.io/badge/%E6%9C%AC%E5%9C%B0%E7%BF%BB%E8%AF%91-CPU-%239ed8ad?style=flat-square)
 
 </div>
 
@@ -34,7 +34,7 @@
 - **老板键，按自己的习惯：** 首次使用可自定义切换快捷键、口令与免验证；未设置快捷键时，入口保留在待办侧栏；设置后，入口移到影音模式的「设置 → 老板键」，无论是否启用口令验证。
 
 - **轻巧隐藏与恢复：** 一组快捷键收起影音窗口；支持鼠标移出自动隐藏、停留恢复，隐藏时暂停播放并静音。窗口的位置和尺寸会保留。
-- **窗口内全屏：** 视频占满栖序的内容区域，退出后恢复原窗口尺寸；提供悬浮式播放、暂停与退出控制。不同站点的网页播放器行为可能有差异。
+- **播放器原生全屏：** 触发视频网站播放器自己的“全屏”，视频只占满栖序当前窗口，栖序外层窗口本身不改变尺寸和位置；Esc 退出后回到原布局，并保留播放进度、字幕与键盘控制。
 - **上次看到哪里，回来接着看：** 记忆视频页面与播放位置、本地小说进度、窗口和设置，并提供意外退出后的会话恢复。
 - **属于自己的本地书架：** 导入 TXT、EPUB，支持目录、查找、书签、字号、主题与匀速自动滚动。支持本机朗读、句间跳转、分钟／章节定时和隐藏继续听书，书架支持封面、作者与阅读分类。
 - **阅读外文少切换：** 对支持的外文网页进行本地翻译；对可获取的现有视频字幕进行中英双语展示。翻译模型在本机 CPU 上运行，无须单独申请在线翻译 API Key。
@@ -78,7 +78,7 @@ npm run package
 
 ## 版本与反馈
 
-当前公开版：**v1.9.0**。长书缓存与索引复用、字符定位、标签休眠、独立视频进度、周期待办、分日下班时间，以及应用内备份、更新和回退。详见 [1.9 功能与操作](docs/features-1.9.0.md)。完整信息见 [更新记录](CHANGELOG.md) 和 [使用说明](docs/使用说明.md)。
+当前公开版：**v1.9.2**。在 1.9 的长书、待办、备份与恢复能力上，重点修复 B 站 / YouTube 播放器全屏语义：使用播放器原生全屏并限制在栖序当前窗口内，外层窗口不缩放、不移动。详见 [1.9.2 功能与操作](docs/features-1.9.2.md)。完整信息见 [更新记录](CHANGELOG.md) 和 [使用说明](docs/使用说明.md)。
 
 欢迎在 [Issues](https://github.com/30789126-00/qixu-desktop/issues) 提交 Bug、交互建议或站点适配问题。反馈时请勿附上账户 Cookie、书籍原文、个人任务清单或其他隐私文件。
 

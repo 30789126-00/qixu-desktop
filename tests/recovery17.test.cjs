@@ -45,14 +45,17 @@ function mediaEnv(platform='bilibili'){
   const target={attrs:new Map(),isConnected:true,setAttribute(k,v){this.attrs.set(k,v);},removeAttribute(k){this.attrs.delete(k);}};
   const video={paused:false,ended:false,isConnected:true,tagName:'VIDEO',readyState:4,currentTime:18,duration:100,parentElement:target,addEventListener(name,cb){(events[name]||=[]).push(cb);},getBoundingClientRect:()=>({width:800,height:450}),closest:()=>target,pause(){this.paused=true;},play(){this.paused=false;return Promise.resolve();}};
   const styleHost={appendChild(){}};
-  const document={body:{innerText:''},head:styleHost,documentElement:styleHost,fullscreenElement:null,querySelectorAll(selector){return selector==='video,audio'?[video]:[];},querySelector(selector){if(selector.includes('video'))return video;if(selector==='#movie_player')return null;return null;},getElementById(){return null;},createElement(){return {id:'',style:{},textContent:''};},exitFullscreen(){this.fullscreenElement=null;return Promise.resolve();}};
-  const context={document,console,Set,WeakSet,Promise,MutationObserver:class{constructor(cb){this.cb=cb;}observe(){}}};vm.createContext(context);
-  return {video,target,run:(command,opts={})=>vm.runInContext(mediaScript(command,platform,false,opts),context)};
+  const document={body:{innerText:''},head:styleHost,documentElement:styleHost,fullscreenElement:null,querySelectorAll(selector){return selector==='video,audio'?[video]:[];},querySelector(selector){if(selector.includes('video'))return video;if(selector==='.bpx-player-container'||selector==='#bilibili-player'||selector==='.bilibili-player-video-wrap')return target;if(selector==='#movie_player')return null;return null;},getElementById(){return null;},createElement(){return {id:'',style:{},textContent:''};},exitFullscreen(){this.fullscreenElement=null;return Promise.resolve();}};
+  class Element{};Element.prototype.requestFullscreen=function(){document.fullscreenElement=this;return Promise.resolve();};Object.setPrototypeOf(target,Element.prototype);
+  const context={document,Element,console,Set,WeakSet,Promise,MutationObserver:class{constructor(cb){this.cb=cb;}observe(){}}};vm.createContext(context);
+  return {video,target,document,run:(command,opts={})=>vm.runInContext(mediaScript(command,platform,false,opts),context)};
 }
 
-test('1.7 Bilibili adapter uses in-app fullscreen CSS and preserves controllable playback',()=>{
-  const env=mediaEnv();const before=env.run('status');assert.equal(before.currentTime,18);env.run('fullscreen');assert.equal(env.target.attrs.get('data-qixu-app-fullscreen'),'1');assert.equal(env.video.paused,false);
-  env.run('pause');assert.equal(env.video.paused,true);env.run('resume');assert.equal(env.video.paused,false);env.run('exitFullscreen');assert.equal(env.target.attrs.has('data-qixu-app-fullscreen'),false);
+test('1.9 native fullscreen keeps playback controls and exits without changing media time',async()=>{
+  const env=mediaEnv();const before=env.run('status');assert.equal(before.currentTime,18);assert.equal(env.video.paused,false);
+  env.document.fullscreenElement=env.target;assert.equal(env.run('status').fullscreen,true);
+  env.run('pause');assert.equal(env.video.paused,true);env.run('resume');assert.equal(env.video.paused,false);env.run('exitFullscreen');
+  await Promise.resolve();assert.equal(env.document.fullscreenElement,null);assert.equal(env.run('status').currentTime,18);
 });
 
 test('1.7 media seek restores time and respects whether playback was active before restart',()=>{
