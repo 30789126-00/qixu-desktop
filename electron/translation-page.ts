@@ -30,9 +30,10 @@ function browserController(command:string,args:any):any {
   };
   c.fullscreenTarget=(video:HTMLVideoElement)=>c.container(video);
   c.restoreNative=()=>{if(c.nativeCaptions){c.nativeCaptions.el.style.visibility=c.nativeCaptions.visibility;c.nativeCaptions=null;}if(c.nativeTrack){c.nativeTrack.track.mode=c.nativeTrack.mode;c.nativeTrack=null;}};
-  // A video element itself cannot contain a DOM subtitle layer in fullscreen.
-  const nativeFullscreen=HTMLVideoElement.prototype.requestFullscreen;
-  HTMLVideoElement.prototype.requestFullscreen=function(options){return c.subtitles?Element.prototype.requestFullscreen.call(c.container(this),options):nativeFullscreen.call(this,options);};
+  // Preserve each site's own fullscreen behavior. The bilingual subtitle layer
+  // already lives inside the YouTube/Bilibili player container, so replacing
+  // HTMLVideoElement.requestFullscreen would turn a real player fullscreen into
+  // an artificial page/container fullscreen.
   c.showCue=(video:HTMLVideoElement,cue:any)=>{
    const container=c.container(video);
    if(!c.overlay||c.overlay.parentElement!==container){c.overlay?.remove();const overlay=document.createElement('div');overlay.dataset.qixuUi='subtitles';overlay.style.cssText='position:absolute;left:5%;right:5%;bottom:9%;z-index:2147483647;pointer-events:none;text-align:center;';
@@ -153,7 +154,7 @@ function browserController(command:string,args:any):any {
  if(command==='importCaptions'){
   if(c.videoId&&args.videoId&&c.videoId!==args.videoId)return false;
   if(/^en([-_]|$)/i.test(args.originalLanguage||'')&&!/^en([-_]|$)/i.test(args.language||''))return false;
-  if(args.videoId)c.videoId=args.videoId;c.video=c.player();c.cues=args.cues;c.cueStates.clear();c.captionLang=args.language;c.captionLoaded=true;c.nativeCaptionError='';return true;
+  if(args.videoId)c.videoId=args.videoId;c.video=c.player();c.cues=args.cues;c.cueStates.clear();c.captionLang=args.language;c.captionLoaded=true;c.captionSource=args.source||'native';c.captionReason='';c.nativeCaptionError='';c.nativeTranscriptError='';return true;
  }
  if(command==='captionError'){if(args.source==='transcript')c.nativeTranscriptError=args.message;else c.nativeCaptionError=args.message;return true;}
  if(command==='skip'){if(args.kind==='page'){const item=c.nodes.get(args.id);if(item)item.status='done';}else{const cue=c.cues.find((q:any)=>q.id===args.id);if(cue)cue.skip=true;c.cueStates.set(args.id,'done');}return true;}

@@ -52,7 +52,7 @@ async function startServer() {
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${server.address().port}`;
 }
 async function launch() {
-  app=await electron.launch({args:[root],env:{...process.env,MOYU_TEST:'1',MOYU_DATA_DIR:dataDir},timeout:30000});
+  app=await electron.launch({args:['--disable-gpu',root],env:{...process.env,MOYU_TEST:'1',MOYU_DATA_DIR:dataDir},timeout:30000});
   app.process().stderr?.on('data',data=>fs.appendFileSync(path.join(runDir,'electron-stderr.log'),data));
   page=await app.firstWindow();
   page.on('pageerror',error=>fs.appendFileSync(path.join(runDir,'renderer-errors.log'),String(error.stack||error)+'\n'));
@@ -81,14 +81,14 @@ async function main() {
     await assert.rejects(api('navigate','url','javascript:alert(1)'));
     await assert.rejects(api('navigate','url','file:///C:/Windows/win.ini'));
   });
-  await test('统一全屏和网页全屏都保持原窗口尺寸',async()=>{
+  await test('统一全屏和网页全屏都限制在当前应用窗口内且不改变窗口尺寸',async()=>{
     before=(await winInfo()).bounds;
     for(let n=0;n<3;n++){
-      await api('mediaAction','fullscreen',true);await eventually(async()=>(await state()).fullscreen);assert.deepEqual((await winInfo()).bounds,before);assert.equal((await winInfo()).fullscreen,false);
+      await api('mediaAction','fullscreen',true);await eventually(async()=>(await state()).fullscreen);assert.equal((await winInfo()).fullscreen,false);assert.deepEqual((await winInfo()).bounds,before);await eventually(()=>remote('!!document.fullscreenElement'));assert.equal(await remote('!!document.querySelector(\'[data-qixu-app-fullscreen="1"]\')'),false);
       if(n===0){await page.waitForTimeout(200);await page.keyboard.press('Escape');}else await api('mediaAction','fullscreen',false);await eventually(async()=>!(await state()).fullscreen);assert.deepEqual((await winInfo()).bounds,before);
     }
     await remote('document.querySelector("video").requestFullscreen().catch(()=>{});true');await eventually(async()=>(await state()).fullscreen);
-    assert.deepEqual((await winInfo()).bounds,before);await remote('document.exitFullscreen().catch(()=>{});true');await eventually(async()=>!(await state()).fullscreen);assert.deepEqual((await winInfo()).bounds,before);
+    assert.equal((await winInfo()).fullscreen,false);assert.deepEqual((await winInfo()).bounds,before);await eventually(()=>remote('!!document.fullscreenElement'));assert.equal(await remote('!!document.querySelector(\'[data-qixu-app-fullscreen="1"]\')'),false);assert.equal((await state()).fullscreen,true);await api('mediaAction','fullscreen',false);await eventually(async()=>!await remote('!!document.fullscreenElement'));assert.equal((await winInfo()).fullscreen,false);assert.deepEqual((await winInfo()).bounds,before);
   });
   await test('紧急隐藏立即静音暂停，鼠标经过不会恢复',async()=>{
     await api('mediaAction','play');await eventually(()=>remote('!document.querySelector("video").paused'));
