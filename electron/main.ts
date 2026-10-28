@@ -8,6 +8,7 @@ import JSZip from 'jszip';
 import {SaveCoordinator} from './save-coordinator';
 import {WindowDiagnostics} from './window-diagnostics';
 import {videoIdentity,progressId,recordVideo,sanitizeVideoProgress} from './video-progress';
+import {YouTubePlaybackRecovery} from './youtube-recovery';
 import {epubMetadata} from './book-metadata';
 import {BoundedCache} from '../shared/bounded-cache';
 import {BackupService} from './backups';
@@ -77,7 +78,7 @@ let statusBusy = false;
 let widgetHovered=false;
 let activePlatform = 'generic';
 let sourceCooldowns:Record<string,number>={};
-type RuntimeBrowserTab={id:string;sourceId:string;platform:string;view:WebContentsView;sleeping?:boolean;lastActive?:number;time?:number;restorePending?:boolean;seekVersion?:number;media:MediaState;mobile:boolean;desktopUA:string;resumeOnActivate:boolean};
+type RuntimeBrowserTab={id:string;sourceId:string;platform:string;view:WebContentsView;sleeping?:boolean;lastActive?:number;time?:number;restorePending?:boolean;seekVersion?:number;youtubeRecovery?:YouTubePlaybackRecovery;media:MediaState;mobile:boolean;desktopUA:string;resumeOnActivate:boolean};
 let videoPositions:VideoProgress[]=[];
 const diagnostics=new WindowDiagnostics();
 const coverCache=new BoundedCache<string>(100,3*1024*1024,s=>s.length*2);
@@ -147,6 +148,12 @@ const popupTranslators=new Map<BrowserWindow,BrowserTranslator>();
 function cancelBrowserTranslation(){browserTranslator.cancel();for(const controller of popupTranslators.values())controller.cancel();}
 async function flushSessions(){await Promise.allSettled([...sessionsConfigured].map(async partition=>{const s=session.fromPartition(partition);s.flushStorageData();await s.cookies.flushStore();}));}
 function loginDiagnostic(event:string,code?:number){if(testing)return;void fs.mkdir(dataDir,{recursive:true}).then(()=>fs.appendFile(path.join(dataDir,'login-diagnostics.log'),JSON.stringify({at:new Date().toISOString(),source:state.activeSourceId,event,code})+'\n')).catch(()=>{});}
+function playbackDiagnostic(event:string,url:string,attempt:number,reason=''){
+ if(testing)return;
+ // Only a hash is persisted, not the video URL, cookies, or its request data.
+ let video='';try{video=progressId(url).slice(0,12);}catch{}
+ void fs.mkdir(dataDir,{recursive:true}).then(()=>fs.appendFile(path.join(dataDir,'playback-diagnostics.log'),JSON.stringify({at:new Date().toISOString(),platform:'youtube',event,video,attempt,reason})+'\n')).catch(()=>{});
+}
 function publicState():AppState {return state.access==='private'?state:{...state,sources:[],books:[],activeSourceId:null,activeTabId:null,browserTabs:[],browserHistory:[],browserBookmarks:[],fullscreen:false,notice:'',loginMode:false,translation:{model:'idle',page:'',subtitles:'',error:'',completed:0},media:{url:'',title:'',loading:false,error:'',playing:null,muted:true,status:''},resume:{...emptyResumeState}};}
 function emit() { if (win && !win.isDestroyed()) win.webContents.send('moyu:state', publicState());if(controlsView&&!controlsView.webContents.isDestroyed())controlsView.webContents.send('qixu:controls-state',{playing:state.media.playing,muted:state.media.muted});if(tray&&!tray.isDestroyed())tray.setToolTip(state.access==='private'?'栖序 · 单击恢复当前影音／小说，保留进度':'栖序 · 今日待办'); }
 function showTodo(message='',background=false) {
@@ -262,7 +269,7 @@ function rememberVideo(tab:RuntimeBrowserTab,value:{currentTime:number;duration:
  const previous=videoPositions.find(item=>item.id===progressId(tab.media.url));if(previous&&Math.abs(previous.time-tab.time)<1&&Date.now()-previous.at<30000)return;
  videoPositions=recordVideo(videoPositions,{sourceId:tab.sourceId,url:tab.media.url,title:tab.media.title,time:tab.time,duration:Math.max(0,value.duration||0),at:Date.now()});persist();
 }
-function prepareVideoNavigation(tab:RuntimeBrowserTab,url:string){if(mediaIdentity(tab.media.url)===mediaIdentity(url))return;const saved=videoPositions.find(item=>item.id===progressId(url));tab.time=saved?.time||0;tab.restorePending=!!saved;if(tab.id===activeTabId)pendingMediaRestore=saved?{time:saved.time,autoplay:tab.resumeOnActivate}:null;}
+function prepareVideoNavigation(tab:RuntimeBrowserTab,url:string){if(mediaIdentity(tab.media.url)===mediaIdentity(url))return;tab.youtubeRecovery?.reset();const saved=videoPositions.find(item=>item.id===progressId(url));tab.time=saved?.time||0;tab.restorePending=!!saved;if(tab.id===activeTabId)pendingMediaRestore=saved?{time:saved.time,autoplay:tab.resumeOnActivate}:null;}
 function remoteView(sourceId:string){return new WebContentsView({webPreferences:{partition:`persist:moyu-${sourceId}`,nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,disableHtmlFullscreenWindowResize:true,autoplayPolicy:'no-user-gesture-required',backgroundThrottling:true}});}
 function wakeTab(tab:RuntimeBrowserTab){const old=tab.view;try{win.contentView.removeChildView(old);}catch{}if(!old.webContents.isDestroyed())old.webContents.close();tab.view=remoteView(tab.sourceId);tab.sleeping=false;tab.restorePending=true;tab.media.loading=true;tab.media.error='';tab.view.setVisible(false);if(tab.mobile)tab.view.webContents.setUserAgent(MOBILE_UA);win.contentView.addChildView(tab.view);wireRemote(tab.view.webContents,undefined,tab.id);if(/(^|\.)youtube\.com$/.test(new URL(tab.media.url).hostname)){const wc=tab.view.webContents;attachYouTubeCaptions(wc,()=>mediaView?.webContents===wc&&state.access==='private');}}
 async function sleepBrowserTab(id:string,manual=true){
@@ -780,6 +787,8 @@ async function mediaAction(action:string,value?:boolean) {
   if(action==='fullscreen'){await fullscreen(value??!state.fullscreen);return;}
   if(action==='play'||action==='pause'){
     if(isBlocked())return;
+    // An explicit user action cancels any outstanding automatic recovery cycle.
+    tab?.youtubeRecovery?.reset();
     if(pendingMediaRestore)pendingMediaRestore={...pendingMediaRestore,autoplay:action==='play'};
     let result=await controlMedia(mediaView.webContents,action==='play'?'play':'manualPause',activePlatform,false);
     if(action==='play'&&activePlatform==='bilibili'&&!result.some(r=>r.playing)){
@@ -952,6 +961,46 @@ async function start() {
       if(mediaView?.webContents!==contents||mediaIdentity(state.media.url)!==identity||(runtimeTab()?.seekVersion||0)!==seekVersion)return;
       if(platform==='douyin'&&values.some(v=>v.rateLimited)){await stopRateLimitedSource(contents);return;}
       const playing=values.some(v=>v.count>0)?values.some(v=>v.playing):null;const hint=!isBlocked()?values.find(v=>v.hint)?.hint:undefined;
+      const currentTab=runtimeTab();
+      if(platform==='youtube'&&currentTab&&!isBlocked()){
+        const failure=values.find(value=>value.playbackError)?.playbackError||'';
+        const intended=currentTab.resumeOnActivate||state.resume.mediaWasPlaying||state.media.playing===true;
+        const recovery=currentTab.youtubeRecovery??=new YouTubePlaybackRecovery();
+        const event=recovery.observe({identity,error:failure,playing,position:values.find(v=>v.count>0)?.currentTime||0,intended,now:Date.now()});
+        if(event?.kind==='detected'){
+          playbackDiagnostic('detected',currentTab.media.url,event.attempt,failure);
+          state.media.status='YouTube 播放中断，准备自动恢复';emit();
+        }else if(event?.kind==='recovered'){
+          playbackDiagnostic('recovered',currentTab.media.url,event.attempt);
+          state.media.status='YouTube 已自动恢复播放';emit();
+        }else if(event?.kind==='exhausted'){
+          playbackDiagnostic('exhausted',currentTab.media.url,event.attempt,failure);
+          state.media.status='YouTube 自动恢复未成功，请检查网络或手动刷新';emit();
+        }else if(event?.kind==='retry'){
+          // Use the last confirmed playing position, never the errored player's
+          // often-reset time of 0, and preserve the user's play/pause intention.
+          const position=Math.max(0,currentTab.time||state.resume.mediaTime||0);
+          const autoplay=intended;
+          playbackDiagnostic('retry',currentTab.media.url,event.attempt,failure||'no-forward-progress');
+          if(state.fullscreen)await fullscreen(false);
+          if(mediaView?.webContents!==contents||currentTab!==runtimeTab()||isBlocked()||mediaIdentity(currentTab.media.url)!==identity)return;
+          currentTab.time=position;currentTab.restorePending=true;currentTab.resumeOnActivate=autoplay;
+          pendingMediaRestore={time:position,autoplay};
+          state.media.loading=true;state.media.error='';state.media.status=`YouTube 自动重试 ${event.attempt}/2，恢复至上次观看位置`;
+          updateResume({mediaTime:position,mediaWasPlaying:autoplay},true);emit();
+          try{contents.reload();}catch(e){
+            playbackDiagnostic('reload-failed',currentTab.media.url,event.attempt);
+            currentTab.restorePending=false;pendingMediaRestore=null;
+            state.media.loading=false;state.media.status='YouTube 重新加载失败，请手动刷新';emit();
+          }
+          return;
+        }
+        if(failure){
+          // Ignore the error screen's paused/zero-time status: overwriting it
+          // would destroy the resume point and the autoplay intention.
+          return;
+        }
+      }
       if(!isBlocked()){
         const principal=values.find(v=>v.count>0&&!v.adPlaying);if(principal&&!runtimeTab()?.restorePending){const active=runtimeTab();if(active)rememberVideo(active,principal);const time=Math.max(0,principal.currentTime||0);if(Math.abs(time-state.resume.mediaTime)>=1||playing!==state.resume.mediaWasPlaying){state.resume={...state.resume,section:'video',activeSourceId:state.activeSourceId,mediaUrl:state.media.url,mediaTime:time,mediaWasPlaying:playing===true,recoveredAfterCrash:false};checkpointSession();}}
       }
