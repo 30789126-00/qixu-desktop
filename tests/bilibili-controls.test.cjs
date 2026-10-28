@@ -14,7 +14,7 @@ test('Bilibili fullscreen target script is pinned to the native fullscreen contr
 });
 
 test('Bilibili native fullscreen event is mirrored without triggering fullscreen a second time',()=>{
- const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8');
+ const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8').replace(/\r\n/g,'\n');
  const eventBlock=source.match(/wc\.on\('enter-html-full-screen',[\s\S]*?\n\s*\}\);/i)?.[0]||'';
  assert.match(eventBlock,/state\.fullscreen=true/);
  assert.doesNotMatch(eventBlock,/fullscreen\(true\)/);
@@ -27,7 +27,7 @@ test('Bilibili native fullscreen event is mirrored without triggering fullscreen
 });
 
 test('Fullscreen is mirrored only after the native player has entered HTML fullscreen',()=>{
- const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8');
+ const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8').replace(/\r\n/g,'\n');
  const fullscreenFunction=source.match(/async function fullscreen\(enabled:boolean\) \{[\s\S]*?\n\}/)?.[0]||'';
  const clickAt=fullscreenFunction.indexOf("bilibiliPlayerControls.click(contents,'fullscreen'");
  const firstEnterAt=fullscreenFunction.indexOf('state.fullscreen=true');
@@ -36,7 +36,7 @@ test('Fullscreen is mirrored only after the native player has entered HTML fulls
 });
 
 test('Host window is explicitly protected from OS fullscreen',()=>{
- const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8');
+ const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8').replace(/\r\n/g,'\n');
  assert.match(source,/win=new BrowserWindow\(\{[\s\S]*?fullscreenable:true,[\s\S]*?disableHtmlFullscreenWindowResize:true/);
  assert.match(source,/overrideBrowserWindowOptions:\{[\s\S]*?fullscreenable:false,[\s\S]*?disableHtmlFullscreenWindowResize:true/);
  assert.match(source,/let playerFullscreenBounds: Rectangle \| null = null/);
@@ -48,10 +48,34 @@ test('Host window is explicitly protected from OS fullscreen',()=>{
 });
 
 test('Player fullscreen fills only Qixu client content and preserves the host bounds snapshot',()=>{
- const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8');
+ const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8').replace(/\r\n/g,'\n');
  assert.match(source,/const r=state\.fullscreen\?\{x:0,y:0,width:w,height:h\}:viewport!/);
  const fullscreenFunction=source.match(/async function fullscreen\(enabled:boolean\) \{[\s\S]*?\n\}/)?.[0]||'';
  assert.match(fullscreenFunction,/preparePlayerFullscreenHost\(\)/);
  assert.match(fullscreenFunction,/restorePlayerFullscreenHost\(\)/);
  assert.doesNotMatch(fullscreenFunction,/win\.(setFullScreen|maximize|setBounds|setSize)/);
+});
+
+test('Packaged local UI uses canonical file URLs instead of loadFile paths',()=>{
+ const source=fs.readFileSync(path.resolve(__dirname,'../electron/main.ts'),'utf8').replace(/\r\n/g,'\n');
+ assert.match(source,/app\.isPackaged \? path\.join\(process\.resourcesPath,'ui'\) : null/);
+ assert.match(source,/packagedUiRoot \? path\.join\(packagedUiRoot,'index\.html'\)/);
+ assert.match(source,/await win\.loadURL\(homeUrl\)/);
+ assert.match(source,/await controlsView\.webContents\.loadURL\(fullscreenControlsUrl\)/);
+ assert.doesNotMatch(source,/await win\.loadFile\(homeFile\)/);
+ assert.doesNotMatch(source,/await controlsView\.webContents\.loadFile\(fullscreenControlsFile\)/);
+ assert.match(source,/fileURLToPath\(url\)/);
+ assert.match(source,/!isSameLocalFile\(url,homeFile\)/);
+ assert.match(source,/!isSameLocalFile\(url,fullscreenControlsFile\)/);
+});
+
+test('Packaged fullscreen overlay includes the script referenced by its HTML',()=>{
+ const root=path.resolve(__dirname,'..');
+ const html=fs.readFileSync(path.join(root,'assets/fullscreen-controls.html'),'utf8');
+ const resources=require('../package.json').build.extraResources;
+ for(const match of html.matchAll(/<script\s+src="([^"]+)"/g)){
+  const name=match[1];
+  assert.ok(resources.some(entry=>entry.from===`assets/${name}`&&entry.to===`ui/${name}`),`${name} must be shipped beside the overlay HTML`);
+  assert.ok(fs.statSync(path.join(root,'assets',name)).size>0);
+ }
 });

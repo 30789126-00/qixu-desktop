@@ -16,8 +16,8 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
       - run: npm test
       - name: Fetch and verify pinned translation model
         shell: pwsh

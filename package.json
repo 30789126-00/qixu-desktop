@@ -83,6 +83,10 @@
         "to": "ui/fullscreen-controls.html"
       },
       {
+        "from": "assets/fullscreen-controls.js",
+        "to": "ui/fullscreen-controls.js"
+      },
+      {
         "from": "dist-electron/preload.cjs",
         "to": "ui/preload.cjs"
       },
