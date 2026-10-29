@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="490" viewBox="0 0 1440 490" role="img" aria-label="栖序本地阅读器，TXT、EPUB、目录、书签、朗读和阅读进度展示">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#E7E4F6"/><stop offset=".53" stop-color="#F5ECED"/><stop offset="1" stop-color="#DBECEA"/></linearGradient><linearGradient id="card" x1="0" x2="1"><stop stop-color="#FBF8FA"/><stop offset="1" stop-color="#F2F1F9"/></linearGradient><filter id="s" x="-30%" y="-30%" width="170%" height="170%"><feDropShadow dx="0" dy="13" stdDeviation="17" flood-color="#645A82" flood-opacity=".15"/></filter></defs>
+<rect width="1440" height="490" rx="28" fill="url(#bg)"/>
+<g font-family="Microsoft YaHei,PingFang SC,Noto Sans CJK SC,sans-serif">
+<rect x="66" y="60" width="111" height="37" rx="18.5" fill="#CFC2ED"/><text x="86" y="85" font-size="17" font-weight="700" fill="#443861">本地阅读</text>
+<text x="66" y="164" font-size="48" font-weight="780" fill="#302A47">让好故事，</text><text x="66" y="231" font-size="48" font-weight="780" fill="#302A47">在自己的节奏里展开。</text>
+<text x="69" y="282" font-size="21" fill="#696174">TXT / EPUB · 目录跳转 · 阅读进度</text><text x="69" y="318" font-size="21" fill="#696174">自动滚动 · 本地朗读 · 定时停止</text>
+<rect x="66" y="362" width="166" height="50" rx="25" fill="#685991"/><text x="92" y="394" font-size="18" fill="#FFFFFF">轻松读，慢慢听</text>
+<g filter="url(#s)">
+<rect x="718" y="43" width="651" height="398" rx="27" fill="url(#card)" stroke="#FFFFFF" stroke-width="2"/>
+<rect x="740" y="62" width="177" height="358" rx="17" fill="#EDE7F4"/>
+<text x="765" y="102" font-size="18" font-weight="700" fill="#463A5C">目录</text>
+<rect x="754" y="122" width="146" height="48" rx="11" fill="#D4CAE7"/><text x="768" y="152" font-size="14" fill="#4A3F60">第一章 · 开篇</text>
+<text x="768" y="202" font-size="14" fill="#6B637A">第二章 · 转折</text><text x="768" y="247" font-size="14" fill="#6B637A">第三章 · 继续</text><text x="768" y="292" font-size="14" fill="#6B637A">第四章 · 尾声</text>
+<text x="953" y="98" font-size="15" fill="#A39AB2">EPUB · 阅读中</text><text x="952" y="160" font-size="29" font-weight="750" fill="#44374F">第一章  一个新的开始</text>
+<text x="953" y="212" font-size="17" fill="#716879">午后的阳光落在书页上，</text><text x="953" y="245" font-size="17" fill="#716879">文字安静地流淌，时间也慢了下来。</text><text x="953" y="278" font-size="17" fill="#716879">为每一段阅读，留下刚刚好的空间。</text>
+<path d="M953 312H1323" stroke="#D8D1DF" stroke-width="2"/><rect x="953" y="354" width="370" height="5" rx="2.5" fill="#DDD6E5"/><rect x="953" y="354" width="139" height="5" rx="2.5" fill="#8873BF"/><circle cx="1092" cy="356.5" r="6.5" fill="#8873BF"/><text x="953" y="394" font-size="14" fill="#8D839A">阅读进度 37%</text><text x="1259" y="394" font-size="14" fill="#8D839A">继续阅读 →</text>
+</g>
+<text x="1366" y="467" text-anchor="end" font-size="13" fill="#867F96">产品功能示意 · 非真实截图</text>
+</g></svg>
