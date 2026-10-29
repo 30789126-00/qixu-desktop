@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="docs/images/qixu-hero.svg" width="100%" alt="Qixu — Plan with clarity, unwind with ease" />
+<img src="docs/images/qixu-cover.svg" width="100%" alt="Qixu — Plan with clarity, unwind with ease" />
 
 **A Windows desktop companion for planning, browsing and reading.**
 

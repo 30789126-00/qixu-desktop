@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="620" viewBox="0 0 1440 620" role="img" aria-labelledby="title desc">
+<title id="title">栖序 QIXU · 今日有序，片刻从容</title><desc id="desc">栖序待办、影音模式的功能示意图</desc>
+<defs>
+ <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#12162b"/><stop offset=".58" stop-color="#23233f"/><stop offset="1" stop-color="#102c38"/></linearGradient>
+ <linearGradient id="brand" x2="1" y2="1"><stop stop-color="#c1aeff"/><stop offset="1" stop-color="#7ce5ce"/></linearGradient>
+ <linearGradient id="video" x2="1" y2="1"><stop stop-color="#786be0"/><stop offset=".55" stop-color="#3e5489"/><stop offset="1" stop-color="#20344c"/></linearGradient>
+ <radialGradient id="haze"><stop stop-color="#9c8cff" stop-opacity=".37"/><stop offset="1" stop-color="#9c8cff" stop-opacity="0"/></radialGradient>
+ <filter id="shadow" x="-25%" y="-30%" width="150%" height="170%"><feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#040716" flood-opacity=".45"/></filter>
+ <pattern id="dots" patternUnits="userSpaceOnUse" width="28" height="28"><circle cx="2" cy="2" r="1" fill="#fff" opacity=".08"/></pattern>
+</defs>
+<rect width="1440" height="620" rx="26" fill="url(#bg)"/><rect width="1440" height="620" rx="26" fill="url(#dots)"/><ellipse cx="1160" cy="130" rx="440" ry="370" fill="url(#haze)"/>
+<g font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+ <g transform="translate(90 68)"><rect width="54" height="54" rx="17" fill="url(#brand)"/><path d="M14 27c6-12 22-12 26 0-4 12-20 13-26 0Z" fill="none" stroke="#322a52" stroke-width="4"/><circle cx="27" cy="27" r="4" fill="#322a52"/><text x="74" y="39" font-size="35" font-weight="700" fill="#fbfaff">栖序</text><text x="194" y="37" font-size="15" letter-spacing="4" fill="#aab0cd">QIXU</text></g>
+ <text x="90" y="235" font-size="58" font-weight="700" fill="#ffffff">今日有序，</text><text x="90" y="313" font-size="58" font-weight="700" fill="#bcafff">片刻从容。</text>
+ <text x="94" y="372" font-size="23" fill="#e3e6f5">把日程安排好，把片刻留给自己。</text><text x="94" y="410" font-size="20" fill="#b0bad1">四象限待办 · 影音浏览 · 本地阅读</text>
+ <g font-size="15" font-weight="600"><rect x="91" y="456" width="166" height="43" rx="22" fill="#c7baff"/><text x="109" y="483" fill="#292544">Windows 10 / 11</text><rect x="268" y="456" width="104" height="43" rx="22" fill="#ffffff" fill-opacity=".09" stroke="#ffffff" stroke-opacity=".14"/><text x="292" y="483" fill="#eaeafb">v1.9.3</text><rect x="384" y="456" width="134" height="43" rx="22" fill="#ffffff" fill-opacity=".09" stroke="#ffffff" stroke-opacity=".14"/><text x="407" y="483" fill="#eaeafb">本地优先</text></g>
+ <text x="92" y="571" font-size="13" letter-spacing="2" fill="#8c94b1">PLAN CLEARLY. BROWSE LIGHTLY. READ FREELY.</text>
+</g>
+<g filter="url(#shadow)" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+ <rect x="752" y="75" width="600" height="432" rx="25" fill="#f9f9fd"/>
+ <path d="M777 75h550a25 25 0 0 1 25 25v44H752v-44a25 25 0 0 1 25-25Z" fill="#ebeaf6"/>
+ <circle cx="786" cy="109" r="7" fill="#ff9ba0"/><circle cx="811" cy="109" r="7" fill="#ffc974"/><circle cx="835" cy="109" r="7" fill="#80d8c4"/>
+ <text x="900" y="116" font-size="18" font-weight="700" fill="#44425f">今天的栖序</text><rect x="1202" y="92" width="119" height="34" rx="17" fill="#dedafa"/><text x="1228" y="115" font-size="13" fill="#534f84">四象限待办</text>
+ <text x="790" y="191" font-size="25" font-weight="700" fill="#2c2d48">今天想完成的事</text><text x="791" y="215" font-size="13" fill="#9296aa">任务清单 · 自由拖放</text>
+ <g font-size="15" font-weight="700" fill="#373b50"><rect x="789" y="237" width="249" height="107" rx="16" fill="#fce0d6"/><rect x="1050" y="237" width="267" height="107" rx="16" fill="#ddeafa"/><rect x="789" y="355" width="249" height="115" rx="16" fill="#e9def9"/><rect x="1050" y="355" width="267" height="115" rx="16" fill="#daf0e2"/><text x="811" y="272">●  重要且紧急</text><text x="1072" y="272">●  重要不紧急</text><text x="811" y="390">●  紧急不重要</text><text x="1072" y="390">●  不重要不紧急</text></g>
+ <g font-size="14" fill="#666a7d"><text x="811" y="312">□ 完成今天的计划</text><text x="1072" y="312">□ 读一章喜欢的书</text><text x="811" y="428">□ 整理待办清单</text><text x="1072" y="428">□ 看一段喜欢的视频</text></g>
+ <rect x="1036" y="345" width="324" height="199" rx="22" fill="#1b2442" stroke="#8694ba" stroke-opacity=".42"/>
+ <rect x="1051" y="360" width="294" height="136" rx="13" fill="url(#video)"/>
+ <circle cx="1198" cy="428" r="34" fill="#fff" fill-opacity=".16" stroke="#fff" stroke-opacity=".38"/><path d="M1190 411l24 17-24 17Z" fill="#fff"/>
+ <rect x="1073" y="468" width="249" height="4" rx="2" fill="#fff" fill-opacity=".28"/><rect x="1073" y="468" width="106" height="4" rx="2" fill="#c4b4ff"/>
+ <text x="1056" y="528" font-size="13" fill="#e3e7fc">影音模式</text><text x="1285" y="528" font-size="12" fill="#b2bfdc">▶  12:24</text>
+</g>
+<text x="1330" y="581" text-anchor="end" font-family="'Microsoft YaHei','Noto Sans CJK SC',sans-serif" font-size="12" fill="#8e98b4">画面为功能示意 · 非真实截图</text>
+</svg>

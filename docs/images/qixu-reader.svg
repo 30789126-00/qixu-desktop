@@ -1,20 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="490" viewBox="0 0 1440 490" role="img" aria-label="栖序本地阅读器，TXT、EPUB、目录、书签、朗读和阅读进度展示">
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#E7E4F6"/><stop offset=".53" stop-color="#F5ECED"/><stop offset="1" stop-color="#DBECEA"/></linearGradient><linearGradient id="card" x1="0" x2="1"><stop stop-color="#FBF8FA"/><stop offset="1" stop-color="#F2F1F9"/></linearGradient><filter id="s" x="-30%" y="-30%" width="170%" height="170%"><feDropShadow dx="0" dy="13" stdDeviation="17" flood-color="#645A82" flood-opacity=".15"/></filter></defs>
-<rect width="1440" height="490" rx="28" fill="url(#bg)"/>
-<g font-family="Microsoft YaHei,PingFang SC,Noto Sans CJK SC,sans-serif">
-<rect x="66" y="60" width="111" height="37" rx="18.5" fill="#CFC2ED"/><text x="86" y="85" font-size="17" font-weight="700" fill="#443861">本地阅读</text>
-<text x="66" y="164" font-size="48" font-weight="780" fill="#302A47">让好故事，</text><text x="66" y="231" font-size="48" font-weight="780" fill="#302A47">在自己的节奏里展开。</text>
-<text x="69" y="282" font-size="21" fill="#696174">TXT / EPUB · 目录跳转 · 阅读进度</text><text x="69" y="318" font-size="21" fill="#696174">自动滚动 · 本地朗读 · 定时停止</text>
-<rect x="66" y="362" width="166" height="50" rx="25" fill="#685991"/><text x="92" y="394" font-size="18" fill="#FFFFFF">轻松读，慢慢听</text>
-<g filter="url(#s)">
-<rect x="718" y="43" width="651" height="398" rx="27" fill="url(#card)" stroke="#FFFFFF" stroke-width="2"/>
-<rect x="740" y="62" width="177" height="358" rx="17" fill="#EDE7F4"/>
-<text x="765" y="102" font-size="18" font-weight="700" fill="#463A5C">目录</text>
-<rect x="754" y="122" width="146" height="48" rx="11" fill="#D4CAE7"/><text x="768" y="152" font-size="14" fill="#4A3F60">第一章 · 开篇</text>
-<text x="768" y="202" font-size="14" fill="#6B637A">第二章 · 转折</text><text x="768" y="247" font-size="14" fill="#6B637A">第三章 · 继续</text><text x="768" y="292" font-size="14" fill="#6B637A">第四章 · 尾声</text>
-<text x="953" y="98" font-size="15" fill="#A39AB2">EPUB · 阅读中</text><text x="952" y="160" font-size="29" font-weight="750" fill="#44374F">第一章  一个新的开始</text>
-<text x="953" y="212" font-size="17" fill="#716879">午后的阳光落在书页上，</text><text x="953" y="245" font-size="17" fill="#716879">文字安静地流淌，时间也慢了下来。</text><text x="953" y="278" font-size="17" fill="#716879">为每一段阅读，留下刚刚好的空间。</text>
-<path d="M953 312H1323" stroke="#D8D1DF" stroke-width="2"/><rect x="953" y="354" width="370" height="5" rx="2.5" fill="#DDD6E5"/><rect x="953" y="354" width="139" height="5" rx="2.5" fill="#8873BF"/><circle cx="1092" cy="356.5" r="6.5" fill="#8873BF"/><text x="953" y="394" font-size="14" fill="#8D839A">阅读进度 37%</text><text x="1259" y="394" font-size="14" fill="#8D839A">继续阅读 →</text>
-</g>
-<text x="1366" y="467" text-anchor="end" font-size="13" fill="#867F96">产品功能示意 · 非真实截图</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="500" viewBox="0 0 1440 500" role="img" aria-labelledby="title desc">
+<title id="title">栖序阅读：从文件到书架</title><desc id="desc">展示本地 EPUB、TXT 阅读与进度、朗读和自动滚动能力的界面示意</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#fff4e9"/><stop offset="1" stop-color="#eaf1ff"/></linearGradient><filter id="sh"><feDropShadow dx="0" dy="13" stdDeviation="19" flood-color="#4b4267" flood-opacity=".18"/></filter></defs>
+<rect width="1440" height="500" rx="24" fill="url(#bg)"/>
+<g font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+  <text x="74" y="92" font-size="17" font-weight="700" letter-spacing="3" fill="#8e6db0">03 / READING</text>
+  <text x="74" y="153" font-size="41" font-weight="700" fill="#24283d">喜欢的书，读到哪里都算数。</text>
+  <text x="78" y="203" font-size="20" fill="#5e6379">导入 TXT / EPUB，留下每次阅读的位置。</text>
+  <g font-size="17" fill="#444b67"><rect x="75" y="252" width="194" height="46" rx="23" fill="#e6d8f8"/><text x="105" y="281">目录与书签</text><rect x="281" y="252" width="169" height="46" rx="23" fill="#d2e9f7"/><text x="309" y="281">连续滚动</text><rect x="75" y="311" width="194" height="46" rx="23" fill="#d9eddf"/><text x="105" y="341">自动朗读</text><rect x="281" y="311" width="169" height="46" rx="23" fill="#f9dfcf"/><text x="309" y="341">跨次续读</text></g>
+  <text x="77" y="429" font-size="15" fill="#88849a">全文搜索 · 阅读主题 · 听书定时 · 书架分类</text>
+  <g filter="url(#sh)"><rect x="665" y="58" width="696" height="404" rx="24" fill="#fffcf5"/><rect x="665" y="58" width="696" height="51" rx="24" fill="#f0ebf1"/><circle cx="696" cy="84" r="7" fill="#f29ca4"/><circle cx="719" cy="84" r="7" fill="#f2cb7a"/><circle cx="742" cy="84" r="7" fill="#8bd3c1"/><text x="991" y="91" font-size="14" fill="#6c697d">栖序 / 本地阅读</text>
+  <path d="M865 109v353" stroke="#e7dfe3" stroke-width="2"/>
+  <text x="698" y="160" font-size="17" font-weight="700" fill="#444055">目录</text><rect x="689" y="185" width="161" height="44" rx="11" fill="#ebe4f7"/><text x="707" y="213" font-size="13" fill="#77649e">第三章 · 向前</text><text x="707" y="258" font-size="13" fill="#8d8a9a">第四章 · 继续</text><text x="707" y="291" font-size="13" fill="#8d8a9a">第五章 · 故事</text>
+  <text x="903" y="170" font-size="27" font-weight="700" fill="#403b41">第三章 · 向前</text>
+  <text x="903" y="222" font-size="17" fill="#5a5254">阳光刚好落在桌边，</text><text x="903" y="262" font-size="17" fill="#5a5254">读到喜欢的句子，就多停留一会儿。</text><text x="903" y="302" font-size="17" fill="#5a5254">下一次打开，故事仍从这里继续。</text><text x="903" y="343" font-size="17" fill="#5a5254">让阅读回到它最自然的节奏。</text>
+  <rect x="901" y="396" width="416" height="5" rx="2" fill="#e3dbe4"/><rect x="901" y="396" width="174" height="5" rx="2" fill="#9b86d3"/><text x="903" y="425" font-size="12" fill="#968ea3">阅读进度  42%</text><text x="1317" y="425" text-anchor="end" font-size="13" fill="#8c809a">Aa  ·  ▶  ·  ☰</text></g>
+  <text x="1333" y="481" text-anchor="end" font-size="11" fill="#9290a0">功能示意 · 文案为演示内容</text>
 </g></svg>

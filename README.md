@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="docs/images/qixu-hero.svg" width="100%" alt="栖序 QIXU — 今日有序，片刻从容" />
+<img src="docs/images/qixu-cover.svg" width="100%" alt="栖序 QIXU — 今日有序，片刻从容" />
 
 <br/>
 

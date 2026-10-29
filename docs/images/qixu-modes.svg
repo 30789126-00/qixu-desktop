@@ -1,20 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="510" viewBox="0 0 1440 510" role="img" aria-label="栖序双模式展示：待办规划和影音阅读，产品功能示意">
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#131827"/><stop offset="1" stop-color="#25213C"/></linearGradient><linearGradient id="lav" x1="0" x2="1"><stop stop-color="#C8B6FB"/><stop offset="1" stop-color="#A8E1D2"/></linearGradient><linearGradient id="v" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#514F8D"/><stop offset="1" stop-color="#AC7C99"/></linearGradient></defs>
-<rect width="1440" height="510" rx="28" fill="url(#bg)"/>
-<g font-family="Microsoft YaHei,PingFang SC,Noto Sans CJK SC,sans-serif">
-<text x="56" y="65" font-size="28" font-weight="750" fill="#F8F5FF">两种节奏，一个栖序</text><text x="56" y="93" font-size="16" fill="#BDB6CF">从清晰的计划，到专注的阅读与浏览，自在切换</text>
-<rect x="49" y="120" width="655" height="341" rx="25" fill="#2F2D4B" stroke="#716C92" stroke-opacity=".5"/>
-<text x="79" y="165" font-size="24" fill="#F4EDFF" font-weight="720">01  待办整理</text><text x="79" y="193" font-size="15" fill="#C5C0D8">四象限 · 桌面组件 · 下班倒计时</text>
-<rect x="79" y="215" width="595" height="219" rx="20" fill="#F4F1F9"/>
-<rect x="97" y="231" width="270" height="86" rx="12" fill="#DAE9E0"/><rect x="383" y="231" width="270" height="86" rx="12" fill="#F8E2D5"/><rect x="97" y="333" width="270" height="84" rx="12" fill="#E8DDF8"/><rect x="383" y="333" width="270" height="84" rx="12" fill="#DAE5F8"/>
-<g font-size="16" font-weight="650" fill="#534865"><text x="118" y="259">重要且紧急</text><text x="404" y="259">重要不紧急</text><text x="118" y="362">紧急不重要</text><text x="404" y="362">灵感与备忘</text></g>
-<g stroke="#A4A1AE" stroke-width="2.2" opacity=".8" stroke-linecap="round"><path d="M118 280H315 M118 295H265 M404 280H599 M404 295H561 M118 385H300 M404 385H591"/></g>
-<rect x="737" y="120" width="655" height="341" rx="25" fill="#302D4C" stroke="#716C92" stroke-opacity=".5"/>
-<text x="767" y="165" font-size="24" fill="#F4EDFF" font-weight="720">02  影音阅读</text><text x="767" y="193" font-size="15" fill="#C5C0D8">标签浏览 · 窗口内全屏 · 进度接续</text>
-<rect x="767" y="215" width="595" height="219" rx="20" fill="#151727"/>
-<rect x="782" y="230" width="564" height="39" rx="11" fill="#30324C"/><rect x="797" y="238" width="105" height="22" rx="8" fill="#6D618F"/><rect x="913" y="238" width="98" height="22" rx="8" fill="#3D3D58"/><rect x="1022" y="238" width="98" height="22" rx="8" fill="#3D3D58"/>
-<g font-size="12" fill="#F4F1FC"><text x="811" y="253">影音浏览</text><text x="927" y="253">本地阅读</text><text x="1035" y="253">我的书架</text></g>
-<rect x="782" y="281" width="565" height="136" rx="12" fill="url(#v)"/><circle cx="1064" cy="344" r="34" fill="#FFFFFF" opacity=".22"/><path d="M1057 326L1057 362L1085 344Z" fill="#FFFFFF"/>
-<rect x="807" y="391" width="512" height="5" rx="2.5" fill="#FFFFFF" opacity=".34"/><rect x="807" y="391" width="180" height="5" rx="2.5" fill="url(#lav)"/>
-<text x="1380" y="486" text-anchor="end" font-size="13" fill="#A9A6B9">产品功能示意 · 非真实截图</text>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="550" viewBox="0 0 1440 550" role="img" aria-labelledby="title desc">
+<title id="title">栖序的两种节奏</title><desc id="desc">四象限待办与影音阅读两种模式的交互示意</desc>
+<defs><linearGradient id="light" x2="1" y2="1"><stop stop-color="#f4ecff"/><stop offset="1" stop-color="#e3f2ff"/></linearGradient><linearGradient id="dark" x2="1" y2="1"><stop stop-color="#27223f"/><stop offset="1" stop-color="#15253c"/></linearGradient><linearGradient id="screen" x2="1" y2="1"><stop stop-color="#8775e5"/><stop offset="1" stop-color="#29446b"/></linearGradient><filter id="s"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#25253e" flood-opacity=".13"/></filter></defs>
+<rect width="1440" height="550" rx="24" fill="#f5f6fb"/>
+<g font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+  <rect x="30" y="30" width="673" height="490" rx="26" fill="url(#light)"/>
+  <rect x="737" y="30" width="673" height="490" rx="26" fill="url(#dark)"/>
+  <text x="68" y="86" font-size="16" font-weight="700" letter-spacing="3" fill="#796ab8">01 / FOCUS</text><text x="68" y="140" font-size="35" font-weight="700" fill="#292c49">把要做的事，放在眼前</text>
+  <text x="68" y="177" font-size="17" fill="#626582">四象限拖动 · 桌面组件 · 下班倒计时</text>
+  <g filter="url(#s)"><rect x="68" y="210" width="475" height="266" rx="19" fill="#fffefa"/><rect x="68" y="210" width="475" height="40" rx="19" fill="#fff"/><circle cx="92" cy="231" r="5" fill="#f694a1"/><circle cx="111" cy="231" r="5" fill="#f5c977"/><circle cx="130" cy="231" r="5" fill="#82cfb8"/><text x="159" y="235" font-size="13" fill="#686e84">我的四象限</text>
+  <rect x="86" y="262" width="210" height="86" rx="12" fill="#ffe2dc"/><rect x="307" y="262" width="219" height="86" rx="12" fill="#dceeff"/><rect x="86" y="359" width="210" height="97" rx="12" fill="#eee3ff"/><rect x="307" y="359" width="219" height="97" rx="12" fill="#ddf4e6"/>
+  <g font-size="13" fill="#4d5269"><text x="102" y="287">●  优先完成</text><text x="324" y="287">●  提前安排</text><text x="102" y="385">●  有序处理</text><text x="324" y="385">●  留给自己</text></g>
+  <g font-size="13" fill="#83879c"><text x="102" y="322">☐  今天的关键事项</text><text x="324" y="322">☐  下一步计划</text><text x="102" y="421">☐  清理收件箱</text><text x="324" y="421">☐  休息十分钟</text></g></g>
+  <g filter="url(#s)"><rect x="467" y="376" width="198" height="112" rx="19" fill="#ffffff"/><rect x="480" y="390" width="42" height="43" rx="13" fill="#e4dcfa"/><text x="491" y="417" font-size="21" fill="#705cb4">◷</text><text x="533" y="407" font-size="12" fill="#7e849a">距离下班</text><text x="533" y="428" font-size="20" font-weight="700" fill="#37384f">01:36</text><text x="481" y="463" font-size="12" fill="#8b90a4">随时留在桌面的小组件</text></g>
+  <text x="775" y="86" font-size="16" font-weight="700" letter-spacing="3" fill="#aeb8ff">02 / UNWIND</text><text x="775" y="140" font-size="35" font-weight="700" fill="#faf7ff">想看什么，就接着看什么</text>
+  <text x="775" y="177" font-size="17" fill="#bac4db">多标签 · 窗口内视频全屏 · 隐藏恢复</text>
+  <g filter="url(#s)"><rect x="775" y="210" width="590" height="264" rx="19" fill="#101b30" stroke="#61708f" stroke-opacity=".55"/>
+  <path d="M794 210h552a19 19 0 0 1 19 19v31H775v-31a19 19 0 0 1 19-19Z" fill="#303b55"/>
+  <circle cx="796" cy="234" r="5" fill="#f3959c"/><circle cx="814" cy="234" r="5" fill="#edc272"/><circle cx="832" cy="234" r="5" fill="#85d7ba"/>
+  <rect x="875" y="219" width="120" height="31" rx="10" fill="#536080"/><rect x="1002" y="219" width="94" height="31" rx="10" fill="#44516f"/>
+  <text x="902" y="240" font-size="13" fill="#fafaff">视频</text><text x="1028" y="240" font-size="13" fill="#ced7f1">书架</text>
+  <rect x="795" y="272" width="550" height="176" rx="13" fill="url(#screen)"/><circle cx="1070" cy="355" r="38" fill="#fff" fill-opacity=".16" stroke="#fff" stroke-opacity=".3"/><path d="M1058 334l32 21-32 21Z" fill="#ffffff"/><rect x="827" y="418" width="474" height="5" rx="2" fill="#fff" fill-opacity=".3"/><rect x="827" y="418" width="199" height="5" rx="2" fill="#d0bfff"/></g>
+  <rect x="781" y="489" width="204" height="27" rx="13" fill="#ffffff" fill-opacity=".08" stroke="#ffffff" stroke-opacity=".17"/><text x="801" y="507" font-size="12" fill="#f6efff">移出隐藏 · 暂停与静音</text>
+  <text x="1397" y="535" text-anchor="end" font-size="11" fill="#9399a8">INTERACTION CONCEPT · 功能示意</text>
+</g>
+</svg>
