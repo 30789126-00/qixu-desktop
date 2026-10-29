@@ -1,69 +1,80 @@
-# 栖序 · Qixu
+# 栖序 · QIXU
 
 <div align="center">
 
-<img src="docs/images/qixu-hero.svg" alt="栖序｜今日有序，片刻从容" width="100%" />
+<img src="docs/images/qixu-hero.svg" width="100%" alt="栖序 QIXU — 今日有序，片刻从容" />
 
-**给计划一点秩序，给自己一点自由。**
+<br/>
 
-把四象限待办、桌面小组件、轻量网页浏览和沉浸式阅读，装进一款 Windows 桌面应用。
+**今日有序，片刻从容。**
 
-[下载安装](https://github.com/30789126-00/qixu-desktop/releases/latest) · [功能说明](docs/使用说明.md) · [反馈建议](https://github.com/30789126-00/qixu-desktop/issues) · [English](README_EN.md)
+一款为 Windows 打造的桌面应用。用四象限管理待办，用轻量窗口浏览视频、阅读小说；让专注与放松，都有自己的位置。
 
-![Windows](https://img.shields.io/badge/Windows-10%2F11-3277b3?style=flat-square) ![Version](https://img.shields.io/badge/version-1.9.2-7a59d1?style=flat-square) ![Electron](https://img.shields.io/badge/Electron-%2B_React-%236f86ad?style=flat-square) ![Model](https://img.shields.io/badge/%E6%9C%AC%E5%9C%B0%E7%BF%BB%E8%AF%91-CPU-%239ed8ad?style=flat-square)
+[**⬇ 下载最新版**](https://github.com/30789126-00/qixu-desktop/releases/latest) · [使用说明](docs/使用说明.md) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/30789126-00/qixu-desktop/issues) · [English](README_EN.md)
+
+![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-4388c7?style=flat-square)
+![Latest Release](https://img.shields.io/github/v/release/30789126-00/qixu-desktop?style=flat-square&color=9a7ee7&label=Release)
+![Electron](https://img.shields.io/badge/Electron%20%2B%20React%20%2B%20TS-34354d?style=flat-square)
 
 </div>
 
+---
+
 ## 一张桌面，两种节奏
 
-**认真时，把事情安排好。** 用清晰的四象限管理任务，拖动卡片整理优先级；把小组件留在桌面，随手记下一闪而过的想法，看一眼距离下班还有多久。
+<img src="docs/images/qixu-modes.svg" width="100%" alt="栖序待办整理与影音阅读双模式，产品功能示意" />
 
-**放松时，给自己一个独立空间。** 在同一个窗口里打开视频网站、网页与本地小说，切换标签后接着看。可调透明度、悬浮控制条与窗口内全屏，让内容跟随工作流。
-
-| 整理日常 | 阅读与浏览 |
+|  🗂 待办整理 | 🎬 影音与阅读 |
 | :--- | :--- |
-| 四象限拖动、任务提醒、撤销 | 哔哩哔哩 / YouTube / 番茄小说 |
-| 桌面待办小组件、随手记 | 网页标签、历史记录、书签 |
-| 下班倒计时、加班计时 | TXT / EPUB 本地书库与进度续读 |
-| 深浅主题、多巴胺配色 | 自动滚动、本地网页翻译、双语字幕 |
+| 四象限任务管理，支持拖动调整优先级 | 多标签网页浏览，支持哔哩哔哩与 YouTube |
+| 桌面待办小组件、随手记与提醒 | 番茄小说等在线阅读入口 |
+| 下班倒计时与加班计时 | TXT / EPUB 本地书库、书签与目录 |
+| 周期待办、项目标签与备份恢复 | 阅读进度、视频断点与会话恢复 |
 
-<p align="center"><img src="docs/images/qixu-widget.png" width="330" alt="栖序桌面小组件：演示数据" /></p>
+**认真时，理清眼前的事。** 任务可以在四象限间直接拖动；小组件停留在桌面，记录待办、随手记和下班倒计时。
 
-## 为顺手使用打磨的细节
+**放松时，打开熟悉的内容。** 网页与本地书籍在栖序里各有入口，影音窗口可以调整透明度、置顶状态和尺寸。
 
-- **老板键，按自己的习惯：** 首次使用可自定义切换快捷键、口令与免验证；未设置快捷键时，入口保留在待办侧栏；设置后，入口移到影音模式的「设置 → 老板键」，无论是否启用口令验证。
+<p align="center"><img src="docs/images/qixu-widget.png" width="360" alt="栖序桌面待办小组件实际界面" /><br/><sub>桌面待办小组件</sub></p>
 
-- **轻巧隐藏与恢复：** 一组快捷键收起影音窗口；支持鼠标移出自动隐藏、停留恢复，隐藏时暂停播放并静音。窗口的位置和尺寸会保留。
-- **播放器原生全屏：** 触发视频网站播放器自己的“全屏”，视频只占满栖序当前窗口，栖序外层窗口本身不改变尺寸和位置；Esc 退出后回到原布局，并保留播放进度、字幕与键盘控制。
-- **上次看到哪里，回来接着看：** 记忆视频页面与播放位置、本地小说进度、窗口和设置，并提供意外退出后的会话恢复。
-- **属于自己的本地书架：** 导入 TXT、EPUB，支持目录、查找、书签、字号、主题与匀速自动滚动。支持本机朗读、句间跳转、分钟／章节定时和隐藏继续听书，书架支持封面、作者与阅读分类。
-- **阅读外文少切换：** 对支持的外文网页进行本地翻译；对可获取的现有视频字幕进行中英双语展示。翻译模型在本机 CPU 上运行，无须单独申请在线翻译 API Key。
-- **更适合桌面的设置：** 自定义透明度、置顶、开机自启、网站来源与键盘快捷键。
+## 让阅读回到阅读本身
 
-> 小提示：栖序提供的是便捷的本地界面切换与隐藏体验，**不提供文件加密或真正的访问控制**。网站登录、字幕、视频播放与跳过可跳过广告，取决于网站本身的支持及网络环境。不会绕过原站的会员或付费限制。
+<img src="docs/images/qixu-reader.svg" width="100%" alt="栖序小说阅读器功能示意" />
 
-## 1.9 · 用得久，也用得稳
+把本地 **TXT / EPUB** 导入书架，按自己的节奏阅读：目录跳转、全文搜索、书签、字号与主题调整、自动滚动，以及本机朗读和定时停止。阅读进度会保存，重新打开时可以继续阅读。
 
-- **计划会接续：** 周／月重复待办、项目标签组合筛选、按星期安排下班时间。
-- **阅读少等待：** 长书章节缓存有界、全文索引复用、句级听书和定时停止。
-- **浏览更轻：** 闲置标签休眠、独立视频续看、翻译缓存管理。
-- **数据能找回：** 保存时间与自动重试，应用内备份预览、恢复回滚点、校验后更新与版本回退。
+## 一些小而重要的体验
 
-## 快速开始
+- **老板键与隐私式切换**：在设置中自定义快捷键、访问口令或免口令模式；快速收起影音窗口。
+- **窗口内视频全屏**：让视频占满栖序现有窗口的内容区域；退出时恢复原布局与窗口位置、尺寸。
+- **鼠标移出自动隐藏**：可设置自动隐藏，隐藏时暂停、静音，移回后恢复；也可切换窗口置顶行为。
+- **视频与小说接着看**：分别记录阅读位置和支持的平台视频播放进度；崩溃或重启后可尝试恢复上次会话。
+- **本地翻译与双语字幕**：对支持的外文网页进行本机翻译；当站点允许读取现有字幕轨道时，提供双语字幕功能。
+- **数据管理**：支持保存状态提示、备份与恢复；用户书籍、任务和账号会话保存在本机应用数据中。
 
-**系统：** Windows 10 / 11 x64。
+> **使用边界**：第三方网站的登录、播放、字幕读取和广告跳过功能会受网站与网络环境影响，无法保证所有视频都支持。快捷隐藏不等同于文件加密或安全访问控制，栖序不绕过原站会员及付费限制。
 
-1. 打开 **[Releases 下载页](https://github.com/30789126-00/qixu-desktop/releases/latest)**，获取最新的 `Qixu-Setup-*-x64.exe`。
-2. 运行安装包。首次安装默认使用当前 Windows 用户的应用目录；已安装到 `F:\栖序` 的旧版本继续沿用原位置。
-3. 启动「栖序」，进入待办界面；需要影音阅读时，可在待办界面通过快捷键进入访问验证。
+## 最新更新 · v1.9.3
 
-桌面版内置本地翻译模型，因此安装包较大；下载后可离线使用已导入的本地小说。在线网站仍需要网络连接。
+本版重点改善 **YouTube 播放中断后的恢复体验**：识别部分播放器可见错误与媒体错误，针对同一次故障最多自动尝试两次刷新，并尽量从最后一个有效观看时间继续。若网络或站点限制仍导致失败，会提示手动处理；用户主动暂停或切换视频不会触发旧任务继续播放。
 
-⚠️ **Windows SmartScreen：** 此个人项目目前没有代码签名证书，Windows 可能显示未识别发布者。仅从本项目 Releases 下载，并根据页面中的 SHA-256 校验文件，不要关闭系统安全保护。
+**[查看 v1.9.3 发布说明 →](https://github.com/30789126-00/qixu-desktop/releases/tag/v1.9.3)**
+
+## 下载安装
+
+适用系统：**Windows 10 / 11 x64**
+
+1. 前往 **[GitHub Releases](https://github.com/30789126-00/qixu-desktop/releases/latest)** 下载 `Qixu-Setup-*-x64.exe`。
+2. 运行安装程序；覆盖升级时沿用已有安装位置，并保留用户数据与设置。
+3. 打开栖序，从待办模式开始使用，需要影音阅读时再进入相应模式。
+
+安装包包含离线翻译模型，因此体积较大。本地书籍导入后可离线阅读；在线网页仍需网络。
+
+**下载安全**：本个人项目暂未使用商业代码签名证书，Windows SmartScreen 可能提示未知发布者。请仅从本仓库 Releases 下载，并校验同版 SHA-256 文件。
 
 ## 从源码构建
 
-依赖：Node.js 22.12+、npm、Windows .NET Framework 4.x 的 C# 编译器。
+环境：Node.js 22.12+、npm、Windows .NET Framework 4.x C# 编译器。
 
 ```powershell
 npm ci
@@ -72,25 +83,21 @@ npm test
 npm run package
 ```
 
-构建产物输出至 `release/`。模型固定版本并按 SHA-256 校验；源码仓库**不包含约 900 MB 的模型权重**。本地模型权重、用户书籍、任务数据、Cookie 与个人登录会话均不进入 Git 仓库。
+构建结果位于 `release/`。核心技术为 **Electron · React · TypeScript · Vite · WPF · epub.js · Transformers.js**。仓库不包含约 900 MB 的翻译模型权重，也不包含个人任务、书籍、Cookie 或登录数据。
 
-核心技术：**Electron · React · TypeScript · Vite · WPF · epub.js · Transformers.js**。
+## 反馈与关注
 
-## 版本与反馈
+欢迎通过 **[Issues](https://github.com/30789126-00/qixu-desktop/issues)** 反馈 Bug、交互建议或站点兼容性问题。提交日志和截图时，请遮盖账户、私人书籍内容与其他敏感信息。
 
-当前公开版：**v1.9.2**。在 1.9 的长书、待办、备份与恢复能力上，重点修复 B 站 / YouTube 播放器全屏语义：使用播放器原生全屏并限制在栖序当前窗口内，外层窗口不缩放、不移动。详见 [1.9.2 功能与操作](docs/features-1.9.2.md)。完整信息见 [更新记录](CHANGELOG.md) 和 [使用说明](docs/使用说明.md)。
+觉得这个项目有用，可以点击右上角的 **⭐ Star**；选择 **Watch → Custom → Releases** 关注后续更新。
 
-欢迎在 [Issues](https://github.com/30789126-00/qixu-desktop/issues) 提交 Bug、交互建议或站点适配问题。反馈时请勿附上账户 Cookie、书籍原文、个人任务清单或其他隐私文件。
+<details>
+<summary>第三方许可与使用范围</summary>
 
-**喜欢栖序？可以点亮右上角的 ⭐ Star，并选择 Watch → Custom → Releases**，以后每次发版都能及时看到。
+栖序是持续迭代中的个人 Windows 项目，目前不保证所有第三方网站的功能一致。翻译模型来自 [Xenova/nllb-200-distilled-600M](https://huggingface.co/Xenova/nllb-200-distilled-600M)，模型权重遵循 **CC BY-NC 4.0（非商业）**。具体第三方声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) 与 [模型说明](models/MODEL-LICENSE-AND-CARD.md)。第三方网站及商标归原权利人所有。源码公开仅供查看与反馈，尚未另行授予无限制再分发或商业使用许可。
 
-## 使用范围与第三方许可
-
-这是持续迭代中的 Windows 个人项目，目前**不保证所有视频网站的播放器、登录与字幕功能完全可用**。页面翻译依赖网站结构；现有字幕缺失时不进行语音识别。
-
-翻译模型来自 [Xenova/nllb-200-distilled-600M](https://huggingface.co/Xenova/nllb-200-distilled-600M)，其模型权重单独遵循 **CC BY-NC 4.0（非商业）**；具体版权、依赖与许可见 [第三方声明](THIRD_PARTY_NOTICES.txt) 和 [模型卡](models/MODEL-LICENSE-AND-CARD.md)。其他第三方平台商标与内容归原权利人所有。本仓库公开源码供查看与反馈，**尚未授予额外的源码再分发或商业使用许可**。
+</details>
 
 ---
 
-<div align="center"><sub>QIXU · 今日有序，片刻从容</sub></div>
-
+<div align="center"><sub>QIXU · 今日有序，片刻从容 ｜ 图中应用界面为功能示意，非真实截图</sub></div>
